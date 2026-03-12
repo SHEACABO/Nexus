@@ -1301,6 +1301,14 @@ app.get('/api/campaigns', (req, res) => {
     });
 });
 
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        agentMail: 'connected'
+    });
+});
+
 app.get('/api/automation/status', (req, res) => {
     res.json({
         queueSize: emailQueue.filter(e => !e.sent).length,
