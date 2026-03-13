@@ -2285,6 +2285,11 @@ app.post('/api/config/gemini', (req, res) => {
     res.json({ success: true });
 });
 
+// Root route - serves the frontend
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log('');
