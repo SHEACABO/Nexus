@@ -1,0 +1,1607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI - AgentMail Revenue Bot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: { 
+                        background: '#0a0a0a', 
+                        surface: '#141414', 
+                        'surface-elevated': '#1a1a1a', 
+                        primary: '#8b5cf6', 
+                        'primary-hover': '#7c3aed',
+                        secondary: '#10b981', 
+                        accent: '#6366f1', 
+                        border: 'rgba(255, 255, 255, 0.08)', 
+                        muted: '#71717a', 
+                        'muted-foreground': '#a1a1aa',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444'
+                    },
+                    fontFamily: { 
+                        sans: ['Inter', 'system-ui', 'sans-serif'], 
+                        heading: ['Space Grotesk', 'system-ui', 'sans-serif'] 
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0a0a0a; color: #f8fafc; font-family: 'Inter', system-ui, sans-serif; }
+        .glass { background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+        .glass-hover:hover { background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%); border-color: rgba(255,255,255,0.15); }
+        .gradient-text { background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #8b5cf6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .glow-primary { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 0 40px rgba(139, 92, 246, 0.1); }
+        .glow-success { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+        .typing-indicator span { animation: bounce 1.4s infinite ease-in-out both; }
+        .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.3); } 50% { box-shadow: 0 0 40px rgba(16, 185, 129, 0.5); } }
+        .pulse-glow { animation: pulse-glow 2s infinite; }
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    </style>
+</head>
+<body class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-72 bg-surface border-r border-border flex flex-col">
+        <div class="p-6">
+            <div class="flex items-center gap-3 mb-8">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary via-accent to-secondary flex items-center justify-center glow-primary">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    </svg>
+                </div>
+                <div>
+                    <span class="font-heading text-xl font-bold gradient-text">Nexus AI</span>
+                    <p class="text-xs text-muted-foreground">Revenue Bot</p>
+                </div>
+            </div>
+
+            <nav class="space-y-2">
+                <button onclick="setView('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors bg-primary/20 text-primary">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    <span>Dashboard</span>
+                </button>
+                <button onclick="setView('assistant')" id="nav-assistant" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-muted-foreground hover:text-white hover:bg-surface-elevated">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                    <span>AI Assistant</span>
+                </button>
+                <button onclick="setView('inbox')" id="nav-inbox" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-muted-foreground hover:text-white hover:bg-surface-elevated">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    <span>Inbox</span>
+                    <span class="ml-auto bg-red-500/20 text-xs px-2 py-0.5 rounded-full" id="unread-badge">0</span>
+                </button>
+                <button onclick="setView('compose')" id="nav-compose" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-muted-foreground hover:text-white hover:bg-surface-elevated">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    <span>Compose</span>
+                </button>
+                <button onclick="setView('tasks')" id="nav-tasks" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-muted-foreground hover:text-white hover:bg-surface-elevated">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                    <span>Tasks</span>
+                </button>
+                <button onclick="setView('campaigns')" id="nav-campaigns" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-muted-foreground hover:text-white hover:bg-surface-elevated">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+                    <span>Campaigns</span>
+                </button>
+                <button onclick="setView('makemoney')" id="nav-makemoney" class="w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-muted-foreground hover:text-white hover:bg-surface-elevated">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span class="text-success font-medium">Make Money</span>
+                </button>
+            </nav>
+        </div>
+
+        <div class="mt-auto p-6 border-t border-border">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-secondary to-primary flex items-center justify-center text-white font-bold text-sm">AI</div>
+                <div>
+                    <p class="font-medium text-sm">Nexus Agent</p>
+                    <p class="text-xs text-green-400 flex items-center gap-1">
+                        <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                        AgentMail Connected
+                    </p>
+                </div>
+            </div>
+            <p class="text-xs text-muted-foreground truncate"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="611209180d081504130015141304525359210006040f150c00080d4f150e">[email&#160;protected]</a></p>
+            <div class="mt-3 pt-3 border-t border-border">
+                <button onclick="checkConnection()" class="text-xs text-muted-foreground hover:text-white flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    Check Connection
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col">
+        <header class="h-16 border-b border-border flex items-center justify-between px-6">
+            <h1 class="font-heading text-xl font-semibold" id="view-title">Dashboard</h1>
+            <div class="flex items-center gap-4">
+                <div id="connection-indicator" class="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-yellow-500/20 text-yellow-400">
+                    <span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                    Checking...
+                </div>
+                <div class="text-xs text-muted-foreground" id="current-time"></div>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-auto p-6 scrollbar-thin">
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="space-y-6">
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="glass rounded-2xl p-5 glow-success">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-muted-foreground text-sm">Revenue This Month</span>
+                            <span class="text-2xl">💰</span>
+                        </div>
+                        <p class="text-3xl font-bold text-success">$<span id="revenue">0</span></p>
+                        <p class="text-xs text-muted-foreground mt-1">+0% from last month</p>
+                    </div>
+                    <div class="glass rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-muted-foreground text-sm">Emails Processed</span>
+                            <span class="text-2xl">📧</span>
+                        </div>
+                        <p class="text-3xl font-bold"><span id="emails-processed">24</span></p>
+                        <p class="text-xs text-muted-foreground mt-1">This week</p>
+                    </div>
+                    <div class="glass rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-muted-foreground text-sm">Leads Captured</span>
+                            <span class="text-2xl">🎯</span>
+                        </div>
+                        <p class="text-3xl font-bold"><span id="leads-captured">8</span></p>
+                        <p class="text-xs text-muted-foreground mt-1">+3 this week</p>
+                    </div>
+                    <div class="glass rounded-2xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-muted-foreground text-sm">Tasks Done</span>
+                            <span class="text-2xl">✅</span>
+                        </div>
+                        <p class="text-3xl font-bold"><span id="tasks-completed">12</span></p>
+                        <p class="text-xs text-muted-foreground mt-1">This week</p>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="glass rounded-2xl p-6">
+                    <h2 class="font-heading text-lg font-semibold mb-4">Quick Actions</h2>
+                    <div class="grid grid-cols-3 gap-4">
+                        <button onclick="setView('compose'); setTimeout(() => document.getElementById('compose-to').focus(), 100)" class="glass-hover rounded-xl p-4 text-left hover:border-primary border border-transparent transition-all">
+                            <div class="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center mb-3">
+                                <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                            </div>
+                            <p class="font-medium">Send Email</p>
+                            <p class="text-xs text-muted-foreground">Compose new email</p>
+                        </button>
+                        <button onclick="processAICommand('analyze my inbox')" class="glass-hover rounded-xl p-4 text-left hover:border-primary border border-transparent transition-all">
+                            <div class="w-10 h-10 rounded-lg bg-secondary/20 flex items-center justify-center mb-3">
+                                <svg class="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                            </div>
+                            <p class="font-medium">Analyze Inbox</p>
+                            <p class="text-xs text-muted-foreground">AI scans for leads</p>
+                        </button>
+                        <button onclick="setView('tasks')" class="glass-hover rounded-xl p-4 text-left hover:border-primary border border-transparent transition-all">
+                            <div class="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center mb-3">
+                                <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                            </div>
+                            <p class="font-medium">View Tasks</p>
+                            <p class="text-xs text-muted-foreground">Manage your to-dos</p>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="glass rounded-2xl p-6">
+                    <h2 class="font-heading text-lg font-semibold mb-4">Recent Activity</h2>
+                    <div id="activity-feed" class="space-y-3">
+                        <div class="flex items-center gap-3 text-sm">
+                            <span class="w-8 h-8 rounded-lg bg-success/20 flex items-center justify-center">✓</span>
+                            <span class="text-muted-foreground">Email sent to <span class="text-white"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="2d4e41444843596d4e42405d4c4354034e4240">[email&#160;protected]</a></span></span>
+                            <span class="ml-auto text-xs text-muted-foreground">2 min ago</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-sm">
+                            <span class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">🤖</span>
+                            <span class="text-muted-foreground">AI identified lead from <span class="text-white"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="0d7d7f627e7d686e794d7e796c7f79787d236462">[email&#160;protected]</a></span></span>
+                            <span class="ml-auto text-xs text-muted-foreground">15 min ago</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-sm">
+                            <span class="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">📋</span>
+                            <span class="text-muted-foreground">Task completed: <span class="text-white">Follow up with leads</span></span>
+                            <span class="ml-auto text-xs text-muted-foreground">1 hour ago</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Assistant View -->
+            <div id="view-assistant" class="max-w-4xl mx-auto space-y-6" style="display:none;">
+                <div class="glass rounded-2xl p-6">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center pulse-glow">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                        </div>
+                        <div>
+                            <h2 class="font-heading text-lg font-semibold">AI Assistant</h2>
+                            <p class="text-sm text-muted-foreground">Powered by Gemini API (Free)</p>
+                        </div>
+                        <button onclick="setView('dashboard')" class="ml-auto text-sm text-muted-foreground hover:text-white">← Back to Dashboard</button>
+                    </div>
+
+                    <div class="relative">
+                        <input type="text" id="ai-command-input" onkeydown="if(event.key==='Enter')processAICommand()"
+                            placeholder="Try: 'Email john@company.com about our services' or 'Create task to follow up with leads'"
+                            class="w-full bg-surface-elevated border border-border rounded-xl px-5 py-4 pr-14 text-white placeholder:text-muted-foreground focus:border-primary focus:outline-none">
+                        <button onclick="processAICommand()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 rounded-lg bg-primary hover:bg-primary-hover transition-colors">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        </button>
+                    </div>
+                    
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <button onclick="processAICommand('analyze my inbox')" class="text-xs px-3 py-1.5 rounded-full bg-surface-elevated hover:bg-primary/20 transition-colors">📧 Analyze Inbox</button>
+                        <button onclick="processAICommand('show my tasks')" class="text-xs px-3 py-1.5 rounded-full bg-surface-elevated hover:bg-primary/20 transition-colors">📋 Show Tasks</button>
+                        <button onclick="processAICommand('find leads in my emails')" class="text-xs px-3 py-1.5 rounded-full bg-surface-elevated hover:bg-primary/20 transition-colors">🎯 Find Leads</button>
+                    </div>
+                </div>
+
+                <div id="ai-chat" class="space-y-4"></div>
+            </div>
+
+            <!-- Inbox View -->
+            <div id="view-inbox-content" class="max-w-4xl mx-auto" style="display:none;">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="font-heading text-xl font-semibold">Email Inbox</h2>
+                    <div class="flex gap-2">
+                        <button onclick="loadEmails()" class="px-4 py-2 rounded-lg bg-surface-elevated hover:bg-surface text-sm flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+                <div id="email-list" class="space-y-3">
+                    <!-- Demo emails -->
+                    <div class="glass rounded-xl p-4 cursor-pointer hover:glass-hover">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 font-bold text-primary">J</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6e040106002e1d1a0f1c1a1b1e400d0103">[email&#160;protected]</a></span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-success/20 text-success">Lead</span>
+                                </div>
+                                <p class="text-sm font-medium">Interested in your services!</p>
+                                <p class="text-xs text-muted-foreground truncate">Hi, I came across your profile and I'm interested in...</p>
+                            </div>
+                            <span class="text-xs text-muted-foreground">2h ago</span>
+                        </div>
+                    </div>
+                    <div class="glass rounded-xl p-4 cursor-pointer hover:glass-hover">
+                        <div class="flex items-start gap-4">
+                            <div class="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0 font-bold text-accent">S</div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-medium"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="dfb1baa8acb3baababbaad9fabbabcb7f1bcb0b2">[email&#160;protected]</a></span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-muted/20 text-muted">Newsletter</span>
+                                </div>
+                                <p class="text-sm font-medium">Weekly Tech Digest</p>
+                                <p class="text-xs text-muted-foreground truncate">This week in tech: AI breakthroughs, startup news...</p>
+                            </div>
+                            <span class="text-xs text-muted-foreground">5h ago</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Compose View -->
+            <div id="view-compose" class="max-w-4xl mx-auto" style="display:none;">
+                <div class="glass rounded-2xl p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="font-heading text-xl font-semibold">Send Email via AgentMail</h2>
+                        <span class="text-xs px-3 py-1 rounded-full bg-secondary/20 text-secondary">Ready</span>
+                    </div>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-muted-foreground mb-2">To</label>
+                            <input type="email" id="compose-to" placeholder="recipient@example.com" class="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground focus:border-primary focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-muted-foreground mb-2">Subject</label>
+                            <input type="text" id="compose-subject" placeholder="Email subject" class="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground focus:border-primary focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm text-muted-foreground mb-2">Body</label>
+                            <textarea id="compose-body" rows="8" placeholder="Write your email..." class="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground focus:border-primary focus:outline-none resize-none"></textarea>
+                        </div>
+                        <div class="flex gap-3">
+                            <button onclick="sendEmail()" class="px-6 py-3 rounded-xl bg-primary hover:bg-primary-hover flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                                Send Email
+                            </button>
+                            <button onclick="clearCompose()" class="px-6 py-3 rounded-xl bg-surface-elevated hover:bg-surface">Clear</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tasks View -->
+            <div id="view-tasks" class="max-w-4xl mx-auto" style="display:none;">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="font-heading text-xl font-semibold">Task Manager</h2>
+                    <button onclick="addNewTask()" class="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-sm">+ Add Task</button>
+                </div>
+                
+                <div class="grid grid-cols-4 gap-4 mb-6">
+                    <div class="glass rounded-xl p-4 text-center">
+                        <p class="text-2xl font-bold" id="total-tasks">5</p>
+                        <p class="text-xs text-muted-foreground">Total</p>
+                    </div>
+                    <div class="glass rounded-xl p-4 text-center">
+                        <p class="text-2xl font-bold text-warning" id="pending-tasks">3</p>
+                        <p class="text-xs text-muted-foreground">Pending</p>
+                    </div>
+                    <div class="glass rounded-xl p-4 text-center">
+                        <p class="text-2xl font-bold text-success" id="completed-tasks">2</p>
+                        <p class="text-xs text-muted-foreground">Completed</p>
+                    </div>
+                    <div class="glass rounded-xl p-4 text-center">
+                        <p class="text-2xl font-bold text-danger" id="urgent-tasks">1</p>
+                        <p class="text-xs text-muted-foreground">Urgent</p>
+                    </div>
+                </div>
+
+                <div id="task-list" class="space-y-3"></div>
+            </div>
+
+            <!-- Campaigns View -->
+            <div id="view-campaigns" class="max-w-4xl mx-auto" style="display:none;">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="font-heading text-xl font-semibold">Email Campaigns</h2>
+                    <button onclick="showCreateCampaign()" class="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-sm">+ New Campaign</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="glass rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-medium">Cold Outreach - Startups</span>
+                            <span class="text-xs px-2 py-1 rounded-full bg-success/20 text-success">Active</span>
+                        </div>
+                        <p class="text-sm text-muted-foreground mb-3">Targeting startup founders interested in AI tools</p>
+                        <div class="flex items-center justify-between text-sm">
+                            <span>Sent: <span class="text-white">45</span></span>
+                            <span>Replies: <span class="text-success">8</span></span>
+                            <span>Rate: <span class="text-white">17.8%</span></span>
+                        </div>
+                    </div>
+                    <div class="glass rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-medium">Follow Up - Leads</span>
+                            <span class="text-xs px-2 py-1 rounded-full bg-warning/20 text-warning">Paused</span>
+                        </div>
+                        <p class="text-sm text-muted-foreground mb-3">Following up with warm leads from last month</p>
+                        <div class="flex items-center justify-between text-sm">
+                            <span>Sent: <span class="text-white">23</span></span>
+                            <span>Replies: <span class="text-success">12</span></span>
+                            <span>Rate: <span class="text-white">52.2%</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Make Money View -->
+            <div id="view-makemoney" class="max-w-4xl mx-auto" style="display:none;">
+                <div class="glass rounded-2xl p-6 mb-6">
+                    <div class="flex items-center gap-4 mb-4">
+                        <div class="w-12 h-12 rounded-xl bg-success/20 flex items-center justify-center">
+                            <svg class="w-6 h-6 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        </div>
+                        <div>
+                            <h2 class="font-heading text-xl font-semibold">Make Money</h2>
+                            <p class="text-sm text-muted-foreground">Lead Generation & Cold Outreach System</p>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="glass rounded-xl p-4 text-center">
+                            <p class="text-2xl font-bold text-success" id="money-sent">0</p>
+                            <p class="text-xs text-muted-foreground">Emails Sent</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 text-center">
+                            <p class="text-2xl font-bold text-primary" id="money-replies">0</p>
+                            <p class="text-xs text-muted-foreground">Replies</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 text-center">
+                            <p class="text-2xl font-bold text-warning" id="money-leads">0</p>
+                            <p class="text-xs text-muted-foreground">Leads Added</p>
+                        </div>
+                        <div class="glass rounded-xl p-4 text-center">
+                            <p class="text-2xl font-bold" id="money-rate">0%</p>
+                            <p class="text-xs text-muted-foreground">Reply Rate</p>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button onclick="showAddLead()" class="px-4 py-2 rounded-lg bg-success hover:bg-success/80 text-white flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                            Add Lead
+                        </button>
+                        <button onclick="document.getElementById('csv-input').click()" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            CSV Import
+                        </button>
+                        <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSVImport(this)">
+                        <button onclick="showApolloSearch()" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            Find Leads
+                        </button>
+                        <button onclick="showSequences()" class="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            Sequences
+                        </button>
+                        <button onclick="sendBulkEmails()" class="px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                            Send to All
+                        </button>
+                        <button onclick="showAIGenerator()" class="px-4 py-2 rounded-lg bg-accent hover:bg-accent/80 text-white flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                            AI Generate
+                        </button>
+                        <button onclick="showAutomation()" class="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            Automation
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Add Lead Form -->
+                <div id="add-lead-form" class="glass rounded-2xl p-6 mb-6" style="display:none;">
+                    <h3 class="font-heading text-lg font-semibold mb-4">Add New Lead</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <input type="text" id="lead-name" placeholder="Name" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                        <input type="email" id="lead-email" placeholder="Email *" required class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                        <input type="text" id="lead-company" placeholder="Company" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                        <input type="text" id="lead-industry" placeholder="Industry" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                    </div>
+                    <div class="flex gap-3 mt-4">
+                        <button onclick="saveLead()" class="px-6 py-2 rounded-lg bg-success hover:bg-success/80 text-white">Save Lead</button>
+                        <button onclick="hideAddLead()" class="px-6 py-2 rounded-lg bg-surface-elevated hover:bg-surface">Cancel</button>
+                    </div>
+                </div>
+
+                <!-- Leads List -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="font-heading text-lg font-semibold mb-4">Your Leads</h3>
+                    <div id="leads-list" class="space-y-3"></div>
+                </div>
+
+                <!-- AI Email Generator Modal -->
+                <div id="ai-generator-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display:none;">
+                    <div class="glass rounded-2xl p-6 w-full max-w-2xl">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="font-heading text-lg font-semibold">AI Email Generator</h3>
+                            <button onclick="hideAIGenerator()" class="text-muted-foreground hover:text-white">✕</button>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <input type="text" id="ai-lead-name" placeholder="Lead Name" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                                <input type="text" id="ai-company" placeholder="Company Name" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <input type="text" id="ai-industry" placeholder="Industry (e.g., Plumbing)" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                                <input type="text" id="ai-offer" placeholder="Your Offer (e.g., web design services)" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-muted-foreground mb-2">Additional Context (optional)</label>
+                                <textarea id="ai-context" rows="2" placeholder="Any specific details about the lead..." class="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground"></textarea>
+                            </div>
+                            
+                            <button onclick="generateAIMail()" id="ai-generate-btn" class="w-full px-4 py-3 rounded-xl bg-accent hover:bg-accent/80 text-white flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>
+                                Generate Personalized Email
+                            </button>
+                            
+                            <div id="ai-result" style="display:none;">
+                                <div class="mt-4 p-4 bg-surface-elevated rounded-xl">
+                                    <p class="text-sm text-muted-foreground mb-2">Subject:</p>
+                                    <p class="font-medium mb-3" id="ai-subject-preview"></p>
+                                    <p class="text-sm text-muted-foreground mb-2">Body:</p>
+                                    <p class="whitespace-pre-wrap" id="ai-body-preview"></p>
+                                </div>
+                                <div class="flex gap-3 mt-4">
+                                    <button onclick="copyToCompose()" class="flex-1 px-4 py-2 rounded-lg bg-primary hover:bg-primary-hover text-white">Copy to Compose</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sequence Modal -->
+        <div id="sequence-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display:none;">
+            <div class="glass rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-heading text-lg font-semibold">Email Sequences</h3>
+                    <button onclick="hideSequences()" class="text-muted-foreground hover:text-white">✕</button>
+                </div>
+                
+                <div id="sequence-list" class="space-y-3 mb-4"></div>
+                
+                <div class="border-t border-border pt-4">
+                    <p class="text-sm text-muted-foreground mb-3">Select a lead to send sequence:</p>
+                    <select id="sequence-lead-select" class="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white mb-3">
+                        <option value="">Select a lead...</option>
+                    </select>
+                    <button onclick="runSelectedSequence()" id="run-sequence-btn" class="w-full px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white">
+                        Send Sequence to Lead
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Automation Modal -->
+        <div id="automation-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display:none;">
+            <div class="glass rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-heading text-lg font-semibold">Automation Center</h3>
+                    <button onclick="hideAutomation()" class="text-muted-foreground hover:text-white">✕</button>
+                </div>
+                
+                <!-- Automation Status -->
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                    <div class="glass rounded-xl p-4 text-center">
+                        <p class="text-2xl font-bold text-green-400" id="auto-queue">0</p>
+                        <p class="text-xs text-muted-foreground">Emails Queued</p>
+                    </div>
+                    <div class="glass rounded-xl p-4 text-center">
+                        <p class="text-2xl font-bold text-blue-400" id="auto-daily">0/30</p>
+                        <p class="text-xs text-muted-foreground">Daily Sent</p>
+                    </div>
+                    <div class="glass rounded-xl p-4 text-center">
+                        <p class="text-2xl font-bold text-purple-400" id="auto-replies">0</p>
+                        <p class="text-xs text-muted-foreground">Replies</p>
+                    </div>
+                </div>
+                
+                <!-- Create Campaign -->
+                <div class="mb-6">
+                    <h4 class="font-medium mb-3">Create Automated Campaign</h4>
+                    <div class="space-y-3">
+                        <input type="text" id="campaign-name" placeholder="Campaign Name" class="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                        <select id="campaign-template" class="w-full bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white">
+                            <option value="cold-outreach">Cold Outreach</option>
+                            <option value="free-value">Free Value</option>
+                            <option value="free-audit">Free Audit</option>
+                        </select>
+                        <button onclick="startCampaign()" class="w-full px-4 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white">
+                            🚀 Start Campaign
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Info -->
+                <div class="glass rounded-xl p-4">
+                    <h4 class="font-medium mb-2">How Automation Works:</h4>
+                    <ulclass="text-sm text-muted-foreground space-y-1">
+                        <li>✅ <strong>Day 0:</strong> Sends initial email to all new leads</li>
+                        <li>✅ <strong>Day 3:</strong> Auto follow-up #1 (if no reply)</li>
+                        <li>✅ <strong>Day 7:</strong> Auto follow-up #2 (if no reply)</li>
+                        <li>✅ <strong>Reply Detection:</strong> Auto-stops sequence when lead replies</li>
+                        <li>✅ <strong>Daily Limit:</strong> Max 30 emails/day (spam protection)</li>
+                    </ul>
+                </div>
+                
+                <div class="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                    <p class="text-sm text-yellow-400">⚠️ Keep this page open or run the server 24/7 for automation to work. The server checks every minute for new emails to send.</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Apollo Lead Search Modal -->
+        <div id="apollo-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" style="display:none;">
+            <div class="glass rounded-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-heading text-lg font-semibold">🔍 Find Leads on Apollo.io</h3>
+                    <button onclick="hideApolloSearch()" class="text-muted-foreground hover:text-white">✕</button>
+                </div>
+                
+                <!-- API Key Config -->
+                <div id="apollo-config" class="mb-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                    <p class="text-sm text-yellow-400 mb-3">⚠️ Apollo API key required. Get one from <a href="https://apollo.io" target="_blank" class="underline">apollo.io</a></p>
+                    <div class="flex gap-2">
+                        <input type="password" id="apollo-api-key" placeholder="Enter Apollo API Key" class="flex-1 bg-surface-elevated border border-border rounded-xl px-4 py-2 text-white placeholder:text-muted-foreground">
+                        <button onclick="saveApolloKey()" class="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white">Save</button>
+                    </div>
+                </div>
+                
+                <!-- Search Form -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <input type="text" id="apollo-query" placeholder="Search (e.g., CEO, founder, marketing)" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                    <input type="text" id="apollo-location" placeholder="Location (e.g., United States, New York)" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                    <input type="text" id="apollo-industry" placeholder="Industry (e.g., Software, Healthcare)" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                    <input type="text" id="apollo-title" placeholder="Job Title (e.g., CEO, VP Sales)" class="bg-surface-elevated border border-border rounded-xl px-4 py-3 text-white placeholder:text-muted-foreground">
+                </div>
+                <button onclick="searchApolloLeads()" id="apollo-search-btn" class="w-full px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white mb-4">
+                    🔍 Search Leads
+                </button>
+                
+                <!-- Results -->
+                <div id="apollo-results" class="space-y-2 max-h-64 overflow-y-auto"></div>
+                
+                <!-- Import Button -->
+                <div id="apollo-import-section" class="mt-4 pt-4 border-t border-border" style="display:none;">
+                    <p class="text-sm text-muted-foreground mb-2"><span id="apollo-selected-count">0</span> leads selected</p>
+                    <button onclick="importApolloLeads()" class="w-full px-4 py-3 rounded-xl bg-success hover:bg-success/80 text-white">
+                        📥 Import Selected Leads
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+        // State
+        let tasks = [
+            { id: '1', content: 'Follow up with john@startup.com', status: 'pending', priority: 'high' },
+            { id: '2', content: 'Send proposal to Sarah', status: 'pending', priority: 'urgent' },
+            { id: '3', content: 'Review analytics dashboard', status: 'in_progress', priority: 'medium' },
+            { id: '4', content: 'Schedule team meeting', status: 'completed', priority: 'low' },
+            { id: '5', content: 'Update email templates', status: 'completed', priority: 'low' }
+        ];
+
+        let emails = [];
+        let isBackendConnected = false;
+        const API_BASE = 'https://nexus-production-23fc.up.railway.app/api';
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateTime();
+            setInterval(updateTime, 60000);
+            renderTasks();
+            checkConnection();
+        });
+
+        function updateTime() {
+            document.getElementById('current-time').textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Navigation
+        function setView(view) {
+            const views = ['dashboard', 'assistant', 'inbox-content', 'compose', 'tasks', 'campaigns', 'makemoney'];
+            const titles = {
+                'dashboard': 'Dashboard',
+                'assistant': 'AI Assistant',
+                'inbox-content': 'Email Inbox',
+                'compose': 'Compose Email',
+                'tasks': 'Task Manager',
+                'campaigns': 'Campaigns',
+                'makemoney': 'Make Money'
+            };
+            
+            views.forEach(v => {
+                const el = document.getElementById('view-' + v);
+                if (el) el.style.display = v === view ? 'block' : 'none';
+                
+                const btn = document.getElementById('nav-' + v.replace('-content', ''));
+                if (btn) {
+                    btn.className = v === view 
+                        ? 'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors bg-primary/20 text-primary'
+                        : 'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors text-muted-foreground hover:text-white hover:bg-surface-elevated';
+                }
+            });
+            
+            document.getElementById('view-title').textContent = titles[view];
+            
+            if (view === 'tasks') renderTasks();
+            if (view === 'inbox-content') loadEmails();
+            if (view === 'makemoney') { renderLeads(); loadLeads(); }
+        }
+
+        // Connection Check
+        async function checkConnection() {
+            const indicator = document.getElementById('connection-indicator');
+            try {
+                const res = await fetch(`${API_BASE}/health`);
+                if (res.ok) {
+                    isBackendConnected = true;
+                    indicator.className = 'flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-success/20 text-success';
+                    indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-success"></span> Backend Connected';
+                }
+            } catch (e) {
+                isBackendConnected = false;
+                indicator.className = 'flex items-center gap-2 text-xs px-3 py-1.5 rounded-full bg-yellow-500/20 text-yellow-400';
+                indicator.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span> Demo Mode';
+            }
+        }
+
+        // Tasks
+        function renderTasks() {
+            const list = document.getElementById('task-list');
+            list.innerHTML = '';
+            
+            tasks.forEach(task => {
+                const div = document.createElement('div');
+                div.className = 'glass rounded-xl p-4 flex items-center gap-4';
+                div.innerHTML = `
+                    <button onclick="toggleTask('${task.id}')" class="w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${task.status === 'completed' ? 'bg-success border-success' : task.status === 'in_progress' ? 'bg-primary border-primary' : 'border-muted hover:border-primary'}">
+                        ${task.status === 'completed' ? '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                        ${task.status === 'in_progress' ? '<svg class="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle></svg>' : ''}
+                    </button>
+                    <span class="flex-1 ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}">${task.content}</span>
+                    <span class="text-xs px-2 py-1 rounded-full ${getPriorityColor(task.priority)}">${task.priority}</span>
+                    <button onclick="deleteTask('${task.id}')" class="text-muted-foreground hover:text-danger transition-colors">✕</button>
+                `;
+                list.appendChild(div);
+            });
+
+            document.getElementById('total-tasks').textContent = tasks.length;
+            document.getElementById('pending-tasks').textContent = tasks.filter(t => t.status !== 'completed').length;
+            document.getElementById('completed-tasks').textContent = tasks.filter(t => t.status === 'completed').length;
+            document.getElementById('urgent-tasks').textContent = tasks.filter(t => t.priority === 'urgent').length;
+        }
+
+        function getPriorityColor(p) {
+            return p === 'urgent' ? 'bg-danger/20 text-danger' : 
+                   p === 'high' ? 'bg-warning/20 text-warning' : 
+                   p === 'medium' ? 'bg-primary/20 text-primary' : 'bg-muted/20 text-muted';
+        }
+
+        function toggleTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                if (task.status === 'completed') task.status = 'pending';
+                else if (task.status === 'pending') task.status = 'in_progress';
+                else task.status = 'completed';
+                renderTasks();
+            }
+        }
+
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            renderTasks();
+        }
+
+        function addNewTask() {
+            const content = prompt('Enter task:');
+            if (content) {
+                tasks.unshift({
+                    id: Date.now().toString(),
+                    content,
+                    status: 'pending',
+                    priority: 'medium'
+                });
+                renderTasks();
+            }
+        }
+
+        // Emails
+        async function loadEmails() {
+            if (!isBackendConnected) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/emails`);
+                const data = await res.json();
+                emails = data.emails || [];
+                renderEmails();
+            } catch (e) {
+                console.error('Failed to load emails:', e);
+            }
+        }
+
+        function renderEmails() {
+            const list = document.getElementById('email-list');
+            list.innerHTML = '';
+            
+            if (emails.length === 0) {
+                list.innerHTML = '<p class="text-muted-foreground text-center py-8">No emails found</p>';
+                return;
+            }
+
+            emails.forEach(email => {
+                const div = document.createElement('div');
+                div.className = 'glass rounded-xl p-4 cursor-pointer hover:glass-hover';
+                div.innerHTML = `
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 font-bold text-primary">${email.from[0]?.toUpperCase() || '?'}</div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium">${email.from}</span>
+                            </div>
+                            <p class="text-sm">${email.subject}</p>
+                            <p class="text-xs text-muted-foreground truncate">${email.body?.substring(0, 100) || ''}</p>
+                        </div>
+                        <span class="text-xs text-muted-foreground">${new Date(email.date).toLocaleDateString()}</span>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
+            document.getElementById('unread-badge').textContent = emails.length;
+        }
+
+        // Send Email
+        async function sendEmail() {
+            const to = document.getElementById('compose-to').value;
+            const subject = document.getElementById('compose-subject').value;
+            const body = document.getElementById('compose-body').value;
+
+            if (!to || !subject) {
+                alert('Please enter recipient and subject');
+                return;
+            }
+
+            if (isBackendConnected) {
+                try {
+                    const res = await fetch(`${API_BASE}/send-email`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ to, subject, body })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        alert('✅ Email sent successfully!');
+                        clearCompose();
+                    } else {
+                        alert('❌ Failed: ' + data.error);
+                    }
+                } catch (e) {
+                    alert('❌ Error: ' + e.message);
+                }
+            } else {
+                // Demo mode
+                addAIMessage('demo', `📧 Email queued for delivery!\n\nTo: ${to}\nSubject: ${subject}\n\n💡 To send real emails, run the backend server:\n\ncd server\nnpm install\nnpm start`);
+                clearCompose();
+            }
+        }
+
+        function clearCompose() {
+            document.getElementById('compose-to').value = '';
+            document.getElementById('compose-subject').value = '';
+            document.getElementById('compose-body').value = '';
+        }
+
+        // AI Command Processing
+        async function processAICommand(customCommand = null) {
+            const input = document.getElementById('ai-command-input');
+            const command = customCommand || input.value.trim();
+            if (!command) return;
+
+            addAIMessage('user', command);
+            input.value = '';
+
+            if (isBackendConnected) {
+                try {
+                    const res = await fetch(`${API_BASE}/command`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ command })
+                    });
+                    const data = await res.json();
+                    let response = data.response || 'Command processed';
+                    
+                    if (data.action === 'SEND_EMAIL' && data.sent) {
+                        response = '✅ Email sent successfully!';
+                    } else if (data.action === 'CREATE_TASK') {
+                        response = '✅ Task created: ' + data.task?.content;
+                        renderTasks();
+                    } else if (data.action === 'LIST_TASKS') {
+                        response = '📋 Your tasks:\n' + (data.tasks || tasks).map(t => `• ${t.content} (${t.status})`).join('\n');
+                    }
+                    
+                    addAIMessage('ai', response);
+                } catch (e) {
+                    addAIMessage('ai', '❌ Error: ' + e.message);
+                }
+            } else {
+                // Demo mode AI responses
+                setTimeout(() => {
+                    const lower = command.toLowerCase();
+                    let response = 'I understand. Here are some things I can help with:\n\n';
+                    
+                    if (lower.includes('email') || lower.includes('send to') || lower.includes('mail')) {
+                        response = '📧 I can help you send emails! Just provide:\n• Recipient email\n• Subject\n• Message body\n\nTry: "Email john@company.com about our services"';
+                    } else if (lower.includes('task') || lower.includes('create') || lower.includes('remind')) {
+                        response = '✅ I can create tasks for you!\n\nTry: "Create task to follow up with leads"';
+                    } else if (lower.includes('analyze') || lower.includes('inbox')) {
+                        response = '🔍 I\'ll analyze your inbox for opportunities!\n\nDemo: Found 2 potential leads:\n• john@startup.com - Interested in services\n• sarah@agency.com - Looking for collaboration';
+                    } else if (lower.includes('lead') || lower.includes('find')) {
+                        response = '🎯 Lead Search Results:\n\n1. john@startup.com\n   - Interest: High\n   - Potential: $500+\n\n2. sarah@agency.com\n   - Interest: Medium\n   - Potential: $300+\n\n💡 Run the backend to analyze your real inbox!';
+                    } else if (lower.includes('show') && lower.includes('task')) {
+                        response = '📋 Your current tasks:\n\n' + tasks.map(t => `• ${t.content} [${t.status}] (${t.priority})`).join('\n');
+                    }
+                    
+                    addAIMessage('ai', response);
+                }, 800);
+            }
+        }
+
+        function addAIMessage(role, content) {
+            const chat = document.getElementById('ai-chat');
+            const div = document.createElement('div');
+            div.className = `flex gap-4 ${role === 'user' ? 'flex-row-reverse' : ''}`;
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${role === 'user' ? 'bg-accent/20' : role === 'demo' ? 'bg-warning/20' : 'bg-primary/20'}">
+                    ${role === 'user' 
+                        ? '<svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>'
+                        : role === 'demo'
+                        ? '<svg class="w-5 h-5 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
+                        : '<svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg>'
+                    }
+                </div>
+                <div class="max-w-[70%] ${role === 'user' ? 'text-right' : ''}">
+                    <div class="glass rounded-2xl px-5 py-3 ${role === 'user' ? 'bg-accent/10' : ''}">
+                        <p class="text-white whitespace-pre-wrap">${content}</p>
+                    </div>
+                </div>
+            `;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        // Campaigns
+        function showCreateCampaign() {
+            alert('Campaign creation would open here. This feature requires the backend server.');
+        }
+
+        // ========== MAKE MONEY FUNCTIONS ==========
+        let leads = [];
+        
+        function showAddLead() {
+            document.getElementById('add-lead-form').style.display = 'block';
+        }
+        
+        function hideAddLead() {
+            document.getElementById('add-lead-form').style.display = 'none';
+            document.getElementById('lead-name').value = '';
+            document.getElementById('lead-email').value = '';
+            document.getElementById('lead-company').value = '';
+            document.getElementById('lead-industry').value = '';
+        }
+        
+        async function saveLead() {
+            const name = document.getElementById('lead-name').value;
+            const email = document.getElementById('lead-email').value;
+            const company = document.getElementById('lead-company').value;
+            const industry = document.getElementById('lead-industry').value;
+            
+            if (!email) {
+                alert('Email is required!');
+                return;
+            }
+            
+            if (isBackendConnected) {
+                try {
+                    const res = await fetch(`${API_BASE}/leads`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, email, company, industry })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        leads.push(data.lead);
+                        renderLeads();
+                        hideAddLead();
+                        alert('Lead added successfully!');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            } else {
+                // Demo mode
+                const newLead = {
+                    id: Date.now().toString(),
+                    name, email, company, industry,
+                    status: 'new'
+                };
+                leads.push(newLead);
+                renderLeads();
+                hideAddLead();
+                alert('Lead added (Demo Mode)!');
+            }
+        }
+        
+        function renderLeads() {
+            const list = document.getElementById('leads-list');
+            if (leads.length === 0) {
+                list.innerHTML = '<p class="text-muted-foreground text-center py-8">No leads yet. Add your first lead to start making money!</p>';
+                return;
+            }
+            
+            list.innerHTML = leads.map(lead => `
+                <div class="glass rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-10 h-10 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 font-bold text-success">${lead.name ? lead.name[0].toUpperCase() : '?'}</div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">${lead.name || 'Unknown'}</span>
+                            <span class="text-xs text-muted-foreground">${lead.email}</span>
+                        </div>
+                        <p class="text-xs text-muted-foreground">${lead.company || 'No company'} ${lead.industry ? '• ' + lead.industry : ''}</p>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded-full ${getLeadStatusColor(lead.status)}">${lead.status}</span>
+                    <button onclick="sendToLead('${lead.id}')" class="px-3 py-1 rounded-lg bg-success/20 text-success hover:bg-success/30 text-sm">Send</button>
+                    <button onclick="deleteLead('${lead.id}')" class="text-muted-foreground hover:text-danger">✕</button>
+                </div>
+            `).join('');
+            
+            // Update stats
+            document.getElementById('money-leads').textContent = leads.length;
+        }
+        
+        function getLeadStatusColor(status) {
+            return status === 'new' ? 'bg-gray-500/20 text-gray-400' :
+                   status === 'contacted' ? 'bg-primary/20 text-primary' :
+                   status === 'replied' ? 'bg-success/20 text-success' :
+                   status === 'converted' ? 'bg-warning/20 text-warning' : 'bg-muted/20 text-muted';
+        }
+        
+        async function sendToLead(leadId) {
+            const lead = leads.find(l => l.id === leadId);
+            if (!lead) return;
+            
+            if (isBackendConnected) {
+                try {
+                    const res = await fetch(`${API_BASE}/outreach/send`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ leadId: leadId, templateKey: 'cold-outreach' })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        lead.status = 'contacted';
+                        renderLeads();
+                        document.getElementById('money-sent').textContent = parseInt(document.getElementById('money-sent').textContent) + 1;
+                        alert('Email sent to ' + lead.email + '!');
+                    } else {
+                        alert('Error: ' + data.error);
+}
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            } else {
+                lead.status = 'contacted';
+                renderLeads();
+                document.getElementById('money-sent').textContent = parseInt(document.getElementById('money-sent').textContent) + 1;
+                alert('Demo: Email would be sent to ' + lead.email);
+            }
+        }
+        
+        async function deleteLead(leadId) {
+            leads = leads.filter(l => l.id !== leadId);
+            renderLeads();
+        }
+        
+        async function sendBulkEmails() {
+            const newLeads = leads.filter(l => l.status === 'new');
+            if (newLeads.length === 0) {
+                alert('No new leads to contact!');
+                return;
+            }
+            
+            if (!confirm('Send emails to ' + newLeads.length + ' leads? This will send real emails via AgentMail.')) {
+                return;
+            }
+            
+            let sent = 0;
+            for (const lead of newLeads) {
+                await sendToLead(lead.id);
+                sent++;
+                // Small delay between emails
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            
+            alert('Sent ' + sent + ' emails!');
+        }
+        
+        // Load leads on init
+        async function loadLeads() {
+            if (!isBackendConnected) return;
+            try {
+                const res = await fetch(`${API_BASE}/leads`);
+                const data = await res.json();
+                leads = data.leads || [];
+                renderLeads();
+                if (data.stats) {
+                    document.getElementById('money-sent').textContent = data.stats.sent || 0;
+                    document.getElementById('money-replies').textContent = data.stats.replies || 0;
+                }
+            } catch (e) {
+                console.log('Could not load leads');
+            }
+        }
+
+        // ========== AI EMAIL GENERATOR ==========
+        let generatedEmail = { subject: '', body: '' };
+        
+        function showAIGenerator() {
+            document.getElementById('ai-generator-modal').style.display = 'flex';
+            document.getElementById('ai-result').style.display = 'none';
+        }
+        
+        function hideAIGenerator() {
+            document.getElementById('ai-generator-modal').style.display = 'none';
+        }
+        
+        async function generateAIMail() {
+            const name = document.getElementById('ai-lead-name').value;
+            const company = document.getElementById('ai-company').value;
+            const industry = document.getElementById('ai-industry').value;
+            const offer = document.getElementById('ai-offer').value;
+            const context = document.getElementById('ai-context').value;
+            
+            if (!company) {
+                alert('Please enter at least a company name!');
+                return;
+            }
+            
+            const btn = document.getElementById('ai-generate-btn');
+            btn.innerHTML = '<svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Generating...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/ai/generate-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        leadName: name, 
+                        company, 
+                        industry, 
+                        offer: offer || 'your services',
+                        tone: 'professional but friendly'
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    generatedEmail.subject = data.subject;
+                    generatedEmail.body = data.body;
+                    
+                    document.getElementById('ai-subject-preview').textContent = data.subject;
+                    document.getElementById('ai-body-preview').textContent = data.body;
+                    document.getElementById('ai-result').style.display = 'block';
+                } else {
+                    alert('Error: ' + (data.error || 'Could not generate email'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            
+            btn.innerHTML = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path></svg> Generate Personalized Email';
+            btn.disabled = false;
+        }
+        
+        function copyToCompose() {
+            setView('compose');
+            document.getElementById('compose-subject').value = generatedEmail.subject;
+            document.getElementById('compose-body').value = generatedEmail.body;
+            hideAIGenerator();
+        }
+
+        // ========== CSV IMPORT ==========
+        function handleCSVImport(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const lines = text.split('\n');
+                const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+                
+                const importedLeads = [];
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    const values = lines[i].split(',');
+                    const lead = {};
+                    headers.forEach((h, idx) => {
+                        lead[h] = values[idx] ? values[idx].trim() : '';
+                    });
+                    if (lead.email || lead['email address'] || lead.emailaddress) {
+                        importedLeads.push({
+                            name: lead.name || lead.firstname || '',
+                            email: lead.email || lead['email address'] || lead.emailaddress || '',
+                            company: lead.company || lead.companyname || lead.business || '',
+                            industry: lead.industry || '',
+                            phone: lead.phone || lead.telephone || ''
+                        });
+                    }
+                }
+                
+                if (importedLeads.length > 0) {
+                    if (isBackendConnected) {
+                        fetch(`${API_BASE}/leads/import`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ leads: importedLeads })
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert(`Successfully imported ${data.added} leads!`);
+                                loadLeads();
+                            } else {
+                                alert('Error: ' + data.error);
+                            }
+                        });
+                    } else {
+                        // Demo mode
+                        importedLeads.forEach(l => {
+                            leads.push({
+                                id: Date.now().toString() + Math.random(),
+                                ...l,
+                                status: 'new'
+                            });
+                        });
+                        renderLeads();
+                        alert(`Demo: Added ${importedLeads.length} leads!`);
+                    }
+                } else {
+                    alert('No valid leads found in CSV');
+                }
+            };
+            reader.readAsText(file);
+            input.value = '';
+        }
+
+        // ========== SEQUENCES ==========
+        let sequences = [];
+        let selectedSequenceId = null;
+        
+        function hideSequences() {
+            document.getElementById('sequence-modal').style.display = 'none';
+        }
+        
+        async function showSequences() {
+            // Load sequences from backend or use defaults
+            if (isBackendConnected) {
+                try {
+                    const res = await fetch(`${API_BASE}/sequences`);
+                    const data = await res.json();
+                    sequences = data.sequences || [];
+                } catch (e) {
+                    console.log('Could not load sequences, using defaults');
+                    sequences = getDefaultSequences();
+                }
+            } else {
+                sequences = getDefaultSequences();
+            }
+            
+            // Load leads for the select dropdown
+            const leadSelect = document.getElementById('sequence-lead-select');
+            leadSelect.innerHTML = '<option value="">Select a lead...</option>';
+            leads.forEach(lead => {
+                leadSelect.innerHTML += `<option value="${lead.id}">${lead.name || lead.email} (${lead.company || 'No company'})</option>`;
+            });
+            
+            // Render sequence list
+            renderSequenceList();
+            
+            // Show modal
+            document.getElementById('sequence-modal').style.display = 'flex';
+        }
+        
+        function getDefaultSequences() {
+            return [
+                {
+                    id: '1',
+                    name: 'Classic 3-Step',
+                    steps: [
+                        { day: 0, template: 'cold-outreach', name: 'Initial Email' },
+                        { day: 3, template: 'follow-up', name: 'First Follow-up' },
+                        { day: 7, template: 'free-value', name: 'Last Chance' }
+                    ]
+                },
+                {
+                    id: '2',
+                    name: 'High-Ticket',
+                    steps: [
+                        { day: 0, template: 'cold-outreach', name: 'Initial Email' },
+                        { day: 2, template: 'free-audit', name: 'Value Email' },
+                        { day: 5, template: 'follow-up', name: 'Follow up' },
+                        { day: 10, template: 'quick-question', name: 'Final Touch' }
+                    ]
+                }
+            ];
+        }
+        
+        function renderSequenceList() {
+            const list = document.getElementById('sequence-list');
+            list.innerHTML = sequences.map(seq => `
+                <div class="p-4 bg-surface-elevated rounded-xl cursor-pointer hover:bg-surface transition-colors" onclick="selectSequence('${seq.id}')" id="seq-${seq.id}">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="font-medium">${seq.name}</span>
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-400">${seq.steps.length} steps</span>
+                    </div>
+                    <div class="text-sm text-muted-foreground">
+                        ${seq.steps.map(s => `<div>Day ${s.day}: ${s.name || s.template}</div>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function selectSequence(seqId) {
+            selectedSequenceId = seqId;
+            // Update UI to show selected
+            sequences.forEach(s => {
+                const el = document.getElementById('seq-' + s.id);
+                if (el) {
+                    el.classList.remove('ring-2', 'ring-purple-500');
+                    if (s.id === seqId) {
+                        el.classList.add('ring-2', 'ring-purple-500');
+                    }
+                }
+            });
+        }
+        
+        async function runSelectedSequence() {
+            const leadId = document.getElementById('sequence-lead-select').value;
+            if (!leadId) {
+                alert('Please select a lead first!');
+                return;
+            }
+            if (!selectedSequenceId) {
+                alert('Please select a sequence first!');
+                return;
+            }
+            
+            const btn = document.getElementById('run-sequence-btn');
+            btn.innerHTML = 'Sending...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/sequence/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ leadId, sequenceId: selectedSequenceId })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    alert('✅ Sequence started! Emails will be sent to the lead.');
+                    hideSequences();
+                    loadLeads();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            
+            btn.innerHTML = 'Send Sequence to Lead';
+            btn.disabled = false;
+        }
+
+        async function sendSequenceToLead(leadId, sequenceId) {
+            if (!isBackendConnected) {
+                alert('Demo mode: Sequence would send to lead');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API_BASE}/sequence/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ leadId, sequenceId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert('Sequence started! Emails will be sent.');
+                    loadLeads();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // ========== AUTOMATION ==========
+        async function showAutomation() {
+            document.getElementById('automation-modal').style.display = 'flex';
+            await refreshAutomationStatus();
+            // Auto-refresh every 30 seconds
+            if (window.autoRefreshInterval) clearInterval(window.autoRefreshInterval);
+            window.autoRefreshInterval = setInterval(refreshAutomationStatus, 30000);
+        }
+        
+        function hideAutomation() {
+            document.getElementById('automation-modal').style.display = 'none';
+            if (window.autoRefreshInterval) {
+                clearInterval(window.autoRefreshInterval);
+            }
+        }
+        
+        async function refreshAutomationStatus() {
+            if (!isBackendConnected) return;
+            try {
+                const res = await fetch(`${API_BASE}/automation/status`);
+                const data = await res.json();
+                document.getElementById('auto-queue').textContent = data.queueSize || 0;
+                document.getElementById('auto-daily').textContent = `${data.dailySent || 0}/${data.dailyLimit || 30}`;
+                document.getElementById('auto-replies').textContent = data.repliedLeads || 0;
+            } catch (e) {
+                console.log('Could not load automation status');
+            }
+        }
+        
+        async function startCampaign() {
+            const name = document.getElementById('campaign-name').value;
+            const template = document.getElementById('campaign-template').value;
+            
+            if (!name) {
+                alert('Please enter a campaign name!');
+                return;
+            }
+            
+            // Get all new leads
+            const newLeads = leads.filter(l => l.status === 'new');
+            if (newLeads.length === 0) {
+                alert('No new leads to send to! Import some leads first.');
+                return;
+            }
+            
+            if (!confirm(`Start campaign "${name}" for ${newLeads.length} leads?`)) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_BASE}/campaigns`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        template,
+                        leads: newLeads.map(l => l.id)
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(`✅ Campaign started! ${newLeads.length} leads queued for automated outreach.`);
+                    hideAutomation();
+                    loadLeads();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        // ========== APOLLO LEAD SOURCING ==========
+        let apolloApiKey = '';
+        let apolloResults = [];
+        let selectedApolloLeads = [];
+        
+        function showApolloSearch() {
+            document.getElementById('apollo-modal').style.display = 'flex';
+            document.getElementById('apollo-results').innerHTML = '';
+            document.getElementById('apollo-import-section').style.display = 'none';
+            selectedApolloLeads = [];
+        }
+        
+        function hideApolloSearch() {
+            document.getElementById('apollo-modal').style.display = 'none';
+        }
+        
+        async function saveApolloKey() {
+            const key = document.getElementById('apollo-api-key').value.trim();
+            if (!key) {
+                alert('Please enter an API key');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`${API_BASE}/apollo/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: key })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    apolloApiKey = key;
+                    document.getElementById('apollo-config').style.display = 'none';
+                    alert('✅ Apollo API key saved!');
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+        
+        async function searchApolloLeads() {
+            const query = document.getElementById('apollo-query').value;
+            const location = document.getElementById('apollo-location').value;
+            const industry = document.getElementById('apollo-industry').value;
+            const title = document.getElementById('apollo-title').value;
+            
+            if (!query && !location && !industry && !title) {
+                alert('Please enter at least one search criteria');
+                return;
+            }
+            
+            const btn = document.getElementById('apollo-search-btn');
+            btn.innerHTML = '🔍 Searching...';
+            btn.disabled = true;
+            
+            try {
+                const res = await fetch(`${API_BASE}/apollo/search`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, location, industry, title })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    apolloResults = data.leads || [];
+                    renderApolloResults();
+                } else if (data.needsConfig) {
+                    alert(data.error);
+                    document.getElementById('apollo-config').style.display = 'block';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+            
+            btn.innerHTML = '🔍 Search Leads';
+            btn.disabled = false;
+        }
+        
+        function renderApolloResults() {
+            const container = document.getElementById('apollo-results');
+            if (apolloResults.length === 0) {
+                container.innerHTML = '<p class="text-center text-muted-foreground py-4">No results found</p>';
+                return;
+            }
+            
+            container.innerHTML = apolloResults.map((lead, idx) => `
+                <div class="flex items-center gap-3 p-3 bg-surface-elevated rounded-xl">
+                    <input type="checkbox" class="w-4 h-4" onchange="toggleApolloLead(${idx}, this.checked)" id="apollo-lead-${idx}">
+                    <div class="flex-1">
+                        <div class="font-medium">${lead.name || 'Unknown'}</div>
+                        <div class="text-sm text-muted-foreground">${lead.title || ''} ${lead.company ? 'at ' + lead.company : ''}</div>
+                        <div class="text-sm text-muted-foreground">${lead.location || ''} ${lead.email ? '• ' + lead.email : ''}</div>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded-full ${lead.emailVerified ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}">
+                        ${lead.emailVerified ? '✓ Verified' : 'Unverified'}
+                    </span>
+                </div>
+            `).join('');
+        }
+        
+        function toggleApolloLead(idx, checked) {
+            const lead = apolloResults[idx];
+            if (checked) {
+                if (!selectedApolloLeads.includes(lead)) {
+                    selectedApolloLeads.push(lead);
+                }
+            } else {
+                selectedApolloLeads = selectedApolloLeads.filter(l => l.email !== lead.email);
+            }
+            
+            const importSection = document.getElementById('apollo-import-section');
+            if (selectedApolloLeads.length > 0) {
+                importSection.style.display = 'block';
+                document.getElementById('apollo-selected-count').textContent = selectedApolloLeads.length;
+            } else {
+                importSection.style.display = 'none';
+            }
+        }
+        
+        async function importApolloLeads() {
+            if (selectedApolloLeads.length === 0) return;
+            
+            try {
+                const res = await fetch(`${API_BAS
