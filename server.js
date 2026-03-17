@@ -12,40 +12,49 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// API key auth — set NEXUS_API_KEY in Railway env vars
+const NEXUS_API_KEY = process.env.NEXUS_API_KEY || '';
+function requireAuth(req, res, next) {
+    if (!NEXUS_API_KEY) return next(); // skip if not configured
+    const key = req.headers['x-api-key'] || req.query.apiKey;
+    if (key !== NEXUS_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+    next();
+}
+
 // Middleware
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
 }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// AgentMail Configuration
+// AgentMail Configuration — set these in Railway environment variables
 const AGENTMAIL = {
-    email: 'shyliterature328@agentmail.to',
-    password: 'am_us_840941eb18443c42802c178144a89b1a5598b1f596ca495e91bd9ad8f211a734',
+    email: process.env.AGENTMAIL_EMAIL || 'shyliterature328@agentmail.to',
+    password: process.env.AGENTMAIL_PASSWORD || '',
     smtp: 'smtp.agentmail.to',
     imap: 'imap.agentmail.to'
 };
 
-// AI Configuration (Groq - Fast LLM)
-const OLLAMA_API_KEY = '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';
-const OLLAMA_BASE_URL = 'https://api.groq.com/openai/v1';  // Groq API endpoint
-const OLLAMA_MODEL = 'llama-3.1-70b-versatile';  // Groq model
+// AI Configuration (Groq)
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
+const GROQ_MODEL = 'llama-3.1-70b-versatile';
 
 // Apollo.io API Configuration
-const APOLLO_API_KEY = '';  // User will provide their Apollo API key
+let APOLLO_API_KEY = process.env.APOLLO_API_KEY || '';
 
 // ========== DELIVERABILITY SYSTEM ==========
 // Email accounts with warmup tracking
 let emailAccounts = [
     {
         id: '1',
-        email: 'shyliterature328@agentmail.to',
-        smtp: 'smtp.agentmail.to',
-        imap: 'imap.agentmail.to',
-        password: 'am_us_840941eb18443c42802c178144a89b1a5598b1f596ca495e91bd9ad8f211a734',
+        email: AGENTMAIL.email,
+        smtp: AGENTMAIL.smtp,
+        imap: AGENTMAIL.imap,
+        password: AGENTMAIL.password,
         status: 'active', // active, warming, paused, bounced
         dailyLimit: 30,
         dailySent: 0,
@@ -315,6 +324,9 @@ let clientDatabase = []; // { id, name, email, company, package, status, leadsPr
 // Sample lead count (free preview before payment)
 const SAMPLE_LEAD_COUNT = 50;
 
+// Client leads storage
+let clientLeads = []; // Leads delivered to clients
+
 // Add a new client (when lead converts to opportunity)
 function addClient(lead, packageTier) {
     const service = services[packageTier] || services['starter'];
@@ -404,9 +416,6 @@ async function generateLeadsForClient(client, count) {
         console.error('[ERROR] Lead generation failed:', error.message);
     }
 }
-
-// Client leads storage
-let clientLeads = []; // Leads delivered to clients
 
 // API Endpoints for Clients
 
@@ -800,15 +809,7 @@ app.post('/api/client-finder/reachout', async (req, res) => {
     const body = templateData.body.replace(/{{name}}/g, prospect.name || 'there').replace(/{{company}}/g, prospect.company || 'your company');
     
     try {
-        const transporter = nodemailer.createTransport({
-            host: AGENTMAIL.smtp,
-            port: 587,
-            secure: false,
-            auth: {
-                user: AGENTMAIL.email,
-                pass: AGENTMAIL.password
-            }
-        });
+        const transporter = getSmtpTransporter();
         
         await transporter.sendMail({
             from: AGENTMAIL.email,
@@ -854,6 +855,21 @@ app.post('/api/client-finder/batch-reachout', async (req, res) => {
         
         // Update prospect
         prospects = prospects.map(p => p.id === prospect.id ? { ...p, status: 'contacted' } : p);
+
+        // Actually send the outreach email
+        if (prospect.email) {
+            try {
+                const templateData = emailTemplates[template] || emailTemplates['agency-offer'];
+                const subject = templateData.subject.replace(/{{company}}/g, prospect.company || 'your company');
+                const body = templateData.body.replace(/{{name}}/g, prospect.name || 'there').replace(/{{company}}/g, prospect.company || 'your company');
+                const transporter = getSmtpTransporter();
+                await transporter.sendMail({ from: AGENTMAIL.email, to: prospect.email, subject, text: body });
+                campaignStats.sent++;
+            } catch (emailErr) {
+                console.error('[BATCH] Email failed for', prospect.email, emailErr.message);
+            }
+        }
+
         sent++;
         
         // Small delay to avoid rate limits
@@ -1116,7 +1132,10 @@ let emailQueue = [];
 // Start automation scheduler (runs every minute)
 setInterval(async () => {
     await processEmailQueue();
-    await checkForReplies();
+    // Only check for replies if there are active leads — avoids piling up IMAP connections
+    if (leads.some(l => l.status === 'contacted' || l.status === 'sequence-sent')) {
+        await checkForReplies();
+    }
     await processScheduledFollowups();
 }, 60000); // Check every minute
 
@@ -1302,14 +1321,6 @@ app.get('/api/campaigns', (req, res) => {
         queueSize: emailQueue.filter(e => !e.sent).length,
         dailySent: dailySentCount,
         dailyLimit: DAILY_LIMIT
-    });
-});
-
-app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString(),
-        agentMail: 'connected'
     });
 });
 
@@ -1834,7 +1845,7 @@ app.post('/api/ai/icebreaker', async (req, res) => {
     const { leadName, company, industry, context } = req.body;
     
     // Return fallback if no API key
-    if (!OLLAMA_API_KEY) {
+    if (!GROQ_API_KEY) {
         const fallbacks = [
             `I noticed ${company || 'your company'} and had a quick question`,
             `Saw what you're doing at ${company || 'your company'} - impressive`,
@@ -1861,14 +1872,14 @@ Requirements:
 - NO emojis
 - Just give me the icebreaker sentence, nothing else`;
 
-        const response = await fetch(`${OLLAMA_BASE_URL}/chat/completions`, {
+        const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OLLAMA_API_KEY}`
+                'Authorization': `Bearer ${GROQ_API_KEY}`
             },
             body: JSON.stringify({
-                model: OLLAMA_MODEL,
+                model: GROQ_MODEL,
                 messages: [
                     { role: 'system', content: 'You are a professional email assistant. Generate short, personalized icebreakers.' },
                     { role: 'user', content: prompt }
@@ -1917,7 +1928,7 @@ Requirements:
 app.post('/api/ai/generate-email', async (req, res) => {
     const { leadName, company, industry, offer, tone } = req.body;
     
-    if (!OLLAMA_API_KEY) {
+    if (!GROQ_API_KEY) {
         // Use fallback template if no API key
         const fallbackSubject = `Quick question about ${company || 'your company'}`;
         const fallbackBody = `Hi ${leadName || 'there'},
@@ -1962,14 +1973,14 @@ Format your response as:
 SUBJECT: [subject line]
 BODY: [email body]`;
 
-        const response = await fetch(`${OLLAMA_BASE_URL}/chat/completions`, {
+        const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${OLLAMA_API_KEY}`
+                'Authorization': `Bearer ${GROQ_API_KEY}`
             },
             body: JSON.stringify({
-                model: OLLAMA_MODEL,
+                model: GROQ_MODEL,
                 messages: [
                     { role: 'system', content: 'You are an expert sales copywriter. Write personalized cold emails.' },
                     { role: 'user', content: prompt }
@@ -2110,17 +2121,22 @@ function parseAIResponse(response) {
     };
 }
 
-// API Routes
-
-// Health check
+// Health check (public — frontend needs this to check connection)
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        agentMail: 'connected'
+    });
 });
 
-// Serve frontend
+// Serve frontend (public)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+// Protect all /api/* routes except /api/health
+app.use('/api', requireAuth);
 
 // Get tasks
 app.get('/api/tasks', (req, res) => {
@@ -2287,11 +2303,6 @@ app.post('/api/config/gemini', (req, res) => {
     const { apiKey } = req.body;
     // In production, store securely
     res.json({ success: true });
-});
-
-// Root route - serves the frontend
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Start server
