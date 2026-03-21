@@ -8,29 +8,21 @@ const cors = require('cors');
 const imap = require('imap-simple');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const db = require('./db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// API key auth — set NEXUS_API_KEY in Railway env vars
-const NEXUS_API_KEY = process.env.NEXUS_API_KEY || '';
-function requireAuth(req, res, next) {
-    if (!NEXUS_API_KEY) return next(); // skip if not configured
-    const key = req.headers['x-api-key'] || req.query.apiKey;
-    if (key !== NEXUS_API_KEY) return res.status(401).json({ error: 'Unauthorized' });
-    next();
-}
 
 // Middleware
 app.use(cors({
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-api-key']
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// AgentMail Configuration — set these in Railway environment variables
+// AgentMail Configuration
 const AGENTMAIL = {
     email: process.env.AGENTMAIL_EMAIL || 'shyliterature328@agentmail.to',
     password: process.env.AGENTMAIL_PASSWORD || '',
@@ -38,7 +30,7 @@ const AGENTMAIL = {
     imap: 'imap.agentmail.to'
 };
 
-// AI Configuration (Groq)
+// AI Configuration (Groq - Fast LLM)
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GROQ_BASE_URL = 'https://api.groq.com/openai/v1';
 const GROQ_MODEL = 'llama-3.1-70b-versatile';
@@ -51,10 +43,10 @@ let APOLLO_API_KEY = process.env.APOLLO_API_KEY || '';
 let emailAccounts = [
     {
         id: '1',
-        email: AGENTMAIL.email,
-        smtp: AGENTMAIL.smtp,
-        imap: AGENTMAIL.imap,
-        password: AGENTMAIL.password,
+        email: process.env.AGENTMAIL_EMAIL || 'shyliterature328@agentmail.to',
+        smtp: 'smtp.agentmail.to',
+        imap: 'imap.agentmail.to',
+        password: process.env.AGENTMAIL_PASSWORD || '',
         status: 'active', // active, warming, paused, bounced
         dailyLimit: 30,
         dailySent: 0,
@@ -231,21 +223,10 @@ function trackEmailResult(accountId, result) {
     }
 }
 
-// In-memory storage (replace with database in production)
-let tasks = [
-    { id: '1', content: 'Review project proposal', status: 'pending', priority: 'high' },
-    { id: '2', content: 'Email client about timeline', status: 'in_progress', priority: 'medium' },
-    { id: '3', content: 'Team standup meeting', status: 'completed', priority: 'low' },
-    { id: '4', content: 'Prepare quarterly report', status: 'pending', priority: 'urgent' }
-];
-
+// In-memory email history cache (cleared on restart, fine for transient data)
 let emailHistory = [];
 
 // ========== MONEY-MAKING SYSTEM - LEAD GENERATION AGENCY ==========
-// Leads database
-let leads = [];
-
-// Service Catalog - Lead Generation Agency Packages
 const services = {
     'starter': {
         id: 'starter',
@@ -304,69 +285,20 @@ const services = {
     }
 };
 
-// Campaign/Revenue tracking
-let clients = []; // Converted clients
-let pipeline = []; // Opportunities (interested but not closed)
-
-let campaignStats = {
-    sent: 0,
-    replies: 0,
-    opportunities: 0,
-    leadsAdded: 0,
-    revenue: 0,
-    pipelineValue: 0
-};
-
 // ========== CLIENT MANAGEMENT SYSTEM ==========
-// Client database - stores clients who bought packages
-let clientDatabase = []; // { id, name, email, company, package, status, leadsPromised, leadsDelivered, sampleDelivered, paidAt, createdAt }
 
 // Sample lead count (free preview before payment)
 const SAMPLE_LEAD_COUNT = 50;
 
-// Client leads storage
-let clientLeads = []; // Leads delivered to clients
-
-// Add a new client (when lead converts to opportunity)
-function addClient(lead, packageTier) {
-    const service = services[packageTier] || services['starter'];
-    const client = {
-        id: 'client_' + Date.now(),
-        leadId: lead.id,
-        name: lead.name,
-        email: lead.email,
-        company: lead.company,
-        package: packageTier,
-        status: 'sample', // sample → paid → active → churned
-        leadsPromised: service.leadsPerMonth,
-        leadsDelivered: 0,
-        sampleDelivered: false,
-        paidAt: null,
-        createdAt: new Date().toISOString(),
-        targetIndustry: lead.industry || '',
-        targetLocation: lead.location || ''
-    };
-    clientDatabase.push(client);
-    return client;
-}
 
 // Mark client as paid and deliver remaining leads
-function processPayment(clientId) {
-    const client = clientDatabase.find(c => c.id === clientId);
+async function processPayment(clientId) {
+    const client = await db.getClientById(clientId);
     if (!client) return null;
-    
-    client.status = 'active';
-    client.paidAt = new Date().toISOString();
-    
-    // Calculate remaining leads to deliver
+    await db.updateClient(clientId, { status: 'active', paid_at: new Date().toISOString() });
     const remaining = client.leadsPromised - client.leadsDelivered;
-    
-    // Trigger async lead generation for remaining leads
-    if (remaining > 0) {
-        generateLeadsForClient(client, remaining);
-    }
-    
-    return client;
+    if (remaining > 0) generateLeadsForClient(client, remaining);
+    return await db.getClientById(clientId);
 }
 
 // Generate leads for a client (async)
@@ -375,14 +307,10 @@ async function generateLeadsForClient(client, count) {
         console.log('[WARN] No Apollo API key - skipping lead generation');
         return;
     }
-    
     try {
         const response = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
                 api_key: APOLLO_API_KEY,
                 per_page: Math.min(count, 100),
@@ -390,27 +318,18 @@ async function generateLeadsForClient(client, count) {
                 location: client.targetLocation || ''
             })
         });
-        
         if (!response.ok) return;
-        
         const data = await response.json();
         const newLeads = (data.people || []).map(person => ({
             id: 'lead_' + Date.now() + Math.random().toString(36).substr(2, 9),
             clientId: client.id,
             name: [person.first_name, person.last_name].filter(Boolean).join(' '),
-            email: person.email,
-            company: person.organization?.name || '',
-            title: person.title || '',
-            location: person.location || '',
-            linkedin: person.linkedin_url || '',
-            source: 'apollo-auto',
-            deliveredAt: new Date().toISOString()
+            email: person.email, company: person.organization?.name || '',
+            title: person.title || '', location: person.location || '',
+            linkedin: person.linkedin_url || '', source: 'apollo-auto', isSample: false
         }));
-        
-        // Add to client's delivered leads
-        clientLeads = clientLeads.concat(newLeads);
-        client.leadsDelivered += newLeads.length;
-        
+        await db.addClientLeads(newLeads);
+        await db.updateClient(client.id, { leads_delivered: client.leadsDelivered + newLeads.length });
         console.log(`[AUTO] Generated ${newLeads.length} leads for client ${client.company}`);
     } catch (error) {
         console.error('[ERROR] Lead generation failed:', error.message);
@@ -420,206 +339,120 @@ async function generateLeadsForClient(client, count) {
 // API Endpoints for Clients
 
 // Get all clients
-app.get('/api/clients', (req, res) => {
-    res.json({ 
-        success: true, 
-        clients: clientDatabase,
+app.get('/api/clients', async (req, res) => {
+    const clients = await db.getClients();
+    res.json({
+        success: true, clients,
         stats: {
-            total: clientDatabase.length,
-            sample: clientDatabase.filter(c => c.status === 'sample').length,
-            active: clientDatabase.filter(c => c.status === 'active').length,
-            mrr: clientDatabase.filter(c => c.status === 'active').reduce((sum, c) => sum + (services[c.package]?.price || 0), 0)
+            total: clients.length,
+            sample: clients.filter(c => c.status === 'sample').length,
+            active: clients.filter(c => c.status === 'active').length,
+            mrr: clients.filter(c => c.status === 'active').reduce((sum, c) => sum + (services[c.package]?.price || 0), 0)
         }
     });
 });
 
 // Get single client with leads
-app.get('/api/clients/:id', (req, res) => {
-    const client = clientDatabase.find(c => c.id === req.params.id);
-    if (!client) {
-        return res.json({ success: false, error: 'Client not found' });
-    }
-    
-    const leads = clientLeads.filter(l => l.clientId === client.id);
-    
+app.get('/api/clients/:id', async (req, res) => {
+    const client = await db.getClientById(req.params.id);
+    if (!client) return res.json({ success: false, error: 'Client not found' });
+    const leads = await db.getClientLeads(client.id);
     res.json({
-        success: true,
-        client,
-        leads,
+        success: true, client, leads,
         deliveryProgress: {
-            promised: client.leadsPromised,
-            delivered: client.leadsDelivered,
-            percentage: Math.round((client.leadsDelivered / client.leadsPromised) * 100)
+            promised: client.leadsPromised, delivered: client.leadsDelivered,
+            percentage: client.leadsPromised > 0 ? Math.round((client.leadsDelivered / client.leadsPromised) * 100) : 0
         }
     });
 });
 
-// Create client from lead (convert lead to sample client)
-app.post('/api/clients', (req, res) => {
+// Create client from lead
+app.post('/api/clients', async (req, res) => {
     const { leadId, packageTier, targetIndustry, targetLocation } = req.body;
-    
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead) {
-        return res.json({ success: false, error: 'Lead not found' });
-    }
-    
-    // Check if already a client
-    const existing = clientDatabase.find(c => c.leadId === leadId);
-    if (existing) {
-        return res.json({ success: false, error: 'Already a client' });
-    }
-    
-    const client = {
-        id: 'client_' + Date.now(),
-        leadId: lead.id,
-        name: lead.name,
-        email: lead.email,
-        company: lead.company,
-        package: packageTier || 'starter',
-        status: 'sample',
+    const lead = await db.getLeadById(leadId);
+    if (!lead) return res.json({ success: false, error: 'Lead not found' });
+    const allClients = await db.getClients();
+    if (allClients.find(c => c.leadId === leadId)) return res.json({ success: false, error: 'Already a client' });
+    const client = await db.createClient({
+        id: 'client_' + Date.now(), leadId: lead.id,
+        name: lead.name, email: lead.email, company: lead.company,
+        package: packageTier || 'starter', status: 'sample',
         leadsPromised: services[packageTier || 'starter'].leadsPerMonth,
-        leadsDelivered: 0,
-        sampleDelivered: false,
-        paidAt: null,
-        createdAt: new Date().toISOString(),
+        leadsDelivered: 0, sampleDelivered: false,
         targetIndustry: targetIndustry || lead.industry || '',
         targetLocation: targetLocation || ''
-    };
-    
-    clientDatabase.push(client);
-    
-    // Update lead status
-    leads = leads.map(l => l.id === leadId ? { ...l, status: 'client', clientId: client.id } : l);
-    
-    // Generate sample leads immediately
+    });
+    await db.updateLead(leadId, { status: 'client' });
     generateSampleLeads(client.id);
-    
     res.json({ success: true, client });
 });
 
 // Generate sample leads (50 free leads)
 async function generateSampleLeads(clientId) {
-    const client = clientDatabase.find(c => c.id === clientId);
+    const client = await db.getClientById(clientId);
     if (!client || client.sampleDelivered) return;
-    
-    // Use Apollo to get sample leads
+    let sampleLeads = [];
     if (APOLLO_API_KEY) {
         try {
             const response = await fetch('https://api.apollo.io/api/v1/mixed_people/search', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                 body: JSON.stringify({
-                    api_key: APOLLO_API_KEY,
-                    per_page: SAMPLE_LEAD_COUNT,
-                    q: client.targetIndustry || 'business',
-                    location: client.targetLocation || ''
+                    api_key: APOLLO_API_KEY, per_page: SAMPLE_LEAD_COUNT,
+                    q: client.targetIndustry || 'business', location: client.targetLocation || ''
                 })
             });
-            
             if (response.ok) {
                 const data = await response.json();
-                const sampleLeads = (data.people || []).map(person => ({
+                sampleLeads = (data.people || []).map(person => ({
                     id: 'lead_' + Date.now() + Math.random().toString(36).substr(2, 9),
                     clientId: client.id,
                     name: [person.first_name, person.last_name].filter(Boolean).join(' '),
-                    email: person.email,
-                    company: person.organization?.name || '',
-                    title: person.title || '',
-                    location: person.location || '',
-                    linkedin: person.linkedin_url || '',
-                    isSample: true,
-                    deliveredAt: new Date().toISOString()
+                    email: person.email, company: person.organization?.name || '',
+                    title: person.title || '', location: person.location || '',
+                    linkedin: person.linkedin_url || '', source: 'apollo-sample', isSample: true
                 }));
-                
-                clientLeads = clientLeads.concat(sampleLeads);
-                client.leadsDelivered = sampleLeads.length;
-                client.sampleDelivered = true;
-                
-                console.log(`[AUTO] Generated ${sampleLeads.length} sample leads for ${client.company}`);
             }
-        } catch (error) {
-            console.error('[ERROR] Sample lead generation failed:', error.message);
-        }
+        } catch (e) { console.error('[ERROR] Sample lead generation failed:', e.message); }
     }
-    
-    // If no API, create demo sample leads
-    if (!client.sampleDelivered) {
-        const demoLeads = [];
+    if (sampleLeads.length === 0) {
         for (let i = 0; i < SAMPLE_LEAD_COUNT; i++) {
-            demoLeads.push({
-                id: 'lead_demo_' + Date.now() + i,
-                clientId: client.id,
-                name: 'Sample Lead ' + (i + 1),
-                email: 'lead' + (i + 1) + '@demo.com',
-                company: 'Demo Company ' + (i + 1),
-                title: 'Decision Maker',
-                location: 'United States',
-                linkedin: '',
-                isSample: true,
-                deliveredAt: new Date().toISOString()
+            sampleLeads.push({
+                id: 'lead_demo_' + Date.now() + i, clientId: client.id,
+                name: 'Sample Lead ' + (i + 1), email: 'lead' + (i + 1) + '@demo.com',
+                company: 'Demo Company ' + (i + 1), title: 'Decision Maker',
+                location: 'United States', linkedin: '', source: 'demo', isSample: true
             });
         }
-        clientLeads = clientLeads.concat(demoLeads);
-        client.leadsDelivered = demoLeads.length;
-        client.sampleDelivered = true;
     }
+    await db.addClientLeads(sampleLeads);
+    await db.updateClient(clientId, { sample_delivered: true, leads_delivered: sampleLeads.length });
+    console.log(`[AUTO] Generated ${sampleLeads.length} sample leads for ${client.company}`);
 }
 
-// Simulate payment (in production, this would be Stripe webhook)
-app.post('/api/clients/:id/pay', (req, res) => {
-    const client = clientDatabase.find(c => c.id === req.params.id);
-    if (!client) {
-        return res.json({ success: false, error: 'Client not found' });
-    }
-    
-if (client.status === 'active') {
-        return res.json({ success: false, error: 'Already paid' });
-    }
-    
-    // Process payment
-    const updated = processPayment(client.id);
-    
-    res.json({ 
-        success: true, 
-        client: updated,
-        message: 'Payment processed! Remaining leads are being generated.'
-    });
+// Process payment
+app.post('/api/clients/:id/pay', async (req, res) => {
+    const client = await db.getClientById(req.params.id);
+    if (!client) return res.json({ success: false, error: 'Client not found' });
+    if (client.status === 'active') return res.json({ success: false, error: 'Already paid' });
+    const updated = await processPayment(client.id);
+    res.json({ success: true, client: updated, message: 'Payment processed! Remaining leads are being generated.' });
 });
 
-// Get client's leads (with privacy controls)
-app.get('/api/clients/:id/leads', (req, res) => {
-    const client = clientDatabase.find(c => c.id === req.params.id);
-    if (!client) {
-        return res.json({ success: false, error: 'Client not found' });
-    }
-    
-    const allLeads = clientLeads.filter(l => l.clientId === client.id);
-    
-    // If not paid, only show sample leads (and blur emails)
-    let leadsToShow = allLeads;
-    let showFullAccess = client.status === 'active';
-    
-    if (!showFullAccess) {
-        // Only show sample leads, mask emails
-        leadsToShow = allLeads.filter(l => l.isSample).map(l => ({
-            ...l,
-            email: l.email ? maskEmail(l.email) : '',
-            name: l.name || 'Lead',
-            showPreview: true
-        }));
-    }
-    
+// Get client leads (with privacy controls)
+app.get('/api/clients/:id/leads', async (req, res) => {
+    const client = await db.getClientById(req.params.id);
+    if (!client) return res.json({ success: false, error: 'Client not found' });
+    const allLeads = await db.getClientLeads(client.id);
+    const showFullAccess = client.status === 'active';
+    const leadsToShow = showFullAccess ? allLeads : allLeads.filter(l => l.is_sample).map(l => ({
+        ...l, email: l.email ? maskEmail(l.email) : '', showPreview: true
+    }));
     res.json({
-        success: true,
-        leads: leadsToShow,
-        showFullAccess,
+        success: true, leads: leadsToShow, showFullAccess,
         deliveryProgress: {
-            promised: client.leadsPromised,
-            delivered: client.leadsDelivered,
-            percentage: Math.round((client.leadsDelivered / client.leadsPromised) * 100)
+            promised: client.leadsPromised, delivered: client.leadsDelivered,
+            percentage: client.leadsPromised > 0 ? Math.round((client.leadsDelivered / client.leadsPromised) * 100) : 0
         }
     });
 });
@@ -668,14 +501,12 @@ const prospectTypes = {
 };
 
 // Prospects storage
-let prospects = []; // Potential clients found by the bot
 
 // Find potential clients automatically
 app.post('/api/client-finder/find', async (req, res) => {
     const { prospectType, location, count = 50 } = req.body;
     
     if (!APOLLO_API_KEY) {
-        // Demo mode - generate demo prospects
         const demoProspects = [];
         const type = prospectTypes[prospectType] || prospectTypes['marketing-agency'];
         for (let i = 0; i < count; i++) {
@@ -684,20 +515,12 @@ app.post('/api/client-finder/find', async (req, res) => {
                 name: 'Decision Maker ' + (i + 1),
                 email: 'demo' + (i + 1) + '@' + (prospectType || 'agency') + '.com',
                 company: type.name.replace(' Agencies', '') + ' Company ' + (i + 1),
-                title: 'Owner / CEO',
-                location: location || 'United States',
-                prospectType: prospectType || 'marketing-agency',
-                status: 'new', // new, contacted, interested, client
-                foundAt: new Date().toISOString()
+                title: 'Owner / CEO', location: location || 'United States',
+                prospectType: prospectType || 'marketing-agency', status: 'new'
             });
         }
-        prospects = prospects.concat(demoProspects);
-        return res.json({ 
-            success: true, 
-            message: `Found ${demoProspects.length} demo prospects`,
-            prospects: demoProspects,
-            isDemo: true
-        });
+        await db.addProspects(demoProspects);
+        return res.json({ success: true, message: `Found ${demoProspects.length} demo prospects`, prospects: demoProspects, isDemo: true });
     }
     
     // Real Apollo.io search
@@ -738,24 +561,18 @@ app.post('/api/client-finder/find', async (req, res) => {
             companySize: person.organization?.num_employees || ''
         }));
         
-        // Add to prospects
-        prospects = prospects.concat(foundProspects);
-        
-        res.json({ 
-            success: true, 
-            message: `Found ${foundProspects.length} prospects!`,
-            prospects: foundProspects
-        });
+        await db.addProspects(foundProspects);
+        res.json({ success: true, message: `Found ${foundProspects.length} prospects!`, prospects: foundProspects });
     } catch (error) {
         res.json({ success: false, error: error.message });
     }
 });
 
 // Get all prospects
-app.get('/api/client-finder/prospects', (req, res) => {
-    res.json({ 
-        success: true, 
-        prospects,
+app.get('/api/client-finder/prospects', async (req, res) => {
+    const prospects = await db.getProspects();
+    res.json({
+        success: true, prospects,
         stats: {
             total: prospects.length,
             new: prospects.filter(p => p.status === 'new').length,
@@ -767,64 +584,31 @@ app.get('/api/client-finder/prospects', (req, res) => {
 });
 
 // Update prospect status
-app.put('/api/client-finder/prospects/:id', (req, res) => {
-    const { id } = req.params;
-    const { status } = req.body;
-    
-    prospects = prospects.map(p => p.id === id ? { ...p, status } : p);
+app.put('/api/client-finder/prospects/:id', async (req, res) => {
+    await db.updateProspect(req.params.id, req.body.status);
     res.json({ success: true });
 });
 
-// Send outreach to prospect (convert to lead and send email)
+// Send outreach to prospect
 app.post('/api/client-finder/reachout', async (req, res) => {
     const { prospectId, template = 'agency-offer' } = req.body;
-    
+    const prospects = await db.getProspects();
     const prospect = prospects.find(p => p.id === prospectId);
-    if (!prospect) {
-        return res.json({ success: false, error: 'Prospect not found' });
-    }
-    
-    // Add to leads as a new lead
-    const newLead = {
-        id: 'lead_' + Date.now(),
-        name: prospect.name,
-        email: prospect.email,
-        company: prospect.company,
-        industry: prospect.prospectType,
-        phone: '',
-        notes: '',
-        status: 'new',
-        source: 'client-finder',
-        createdAt: new Date().toISOString()
-    };
-    
-    leads.push(newLead);
-    
-    // Update prospect status
-    prospects = prospects.map(p => p.id === prospectId ? { ...p, status: 'contacted' } : p);
-    
-    // Send email
+    if (!prospect) return res.json({ success: false, error: 'Prospect not found' });
+    const newLead = await db.createLead({
+        id: 'lead_' + Date.now(), name: prospect.name, email: prospect.email,
+        company: prospect.company, industry: prospect.prospectType,
+        phone: '', notes: '', status: 'new', source: 'client-finder'
+    });
+    await db.updateProspect(prospectId, 'contacted');
     const templateData = emailTemplates[template] || emailTemplates['agency-offer'];
     const subject = templateData.subject.replace(/{{company}}/g, prospect.company || 'your company');
     const body = templateData.body.replace(/{{name}}/g, prospect.name || 'there').replace(/{{company}}/g, prospect.company || 'your company');
-    
     try {
         const transporter = getSmtpTransporter();
-        
-        await transporter.sendMail({
-            from: AGENTMAIL.email,
-            to: prospect.email,
-            subject: subject,
-            text: body
-        });
-        
-        campaignStats.sent++;
-        
-        res.json({ 
-            success: true, 
-            message: 'Outreach sent to prospect!',
-            lead: newLead
-        });
+        await transporter.sendMail({ from: AGENTMAIL.email, to: prospect.email, subject, text: body });
+        await db.incrementStat('sent');
+        res.json({ success: true, message: 'Outreach sent to prospect!', lead: newLead });
     } catch (error) {
         res.json({ success: true, message: 'Prospect added as lead (email failed)', lead: newLead });
     }
@@ -851,25 +635,8 @@ app.post('/api/client-finder/batch-reachout', async (req, res) => {
             source: 'client-finder',
             createdAt: new Date().toISOString()
         };
-        leads.push(newLead);
-        
-        // Update prospect
-        prospects = prospects.map(p => p.id === prospect.id ? { ...p, status: 'contacted' } : p);
-
-        // Actually send the outreach email
-        if (prospect.email) {
-            try {
-                const templateData = emailTemplates[template] || emailTemplates['agency-offer'];
-                const subject = templateData.subject.replace(/{{company}}/g, prospect.company || 'your company');
-                const body = templateData.body.replace(/{{name}}/g, prospect.name || 'there').replace(/{{company}}/g, prospect.company || 'your company');
-                const transporter = getSmtpTransporter();
-                await transporter.sendMail({ from: AGENTMAIL.email, to: prospect.email, subject, text: body });
-                campaignStats.sent++;
-            } catch (emailErr) {
-                console.error('[BATCH] Email failed for', prospect.email, emailErr.message);
-            }
-        }
-
+        await db.createLead(newLead);
+        await db.updateProspect(prospect.id, 'contacted');
         sent++;
         
         // Small delay to avoid rate limits
@@ -1118,80 +885,43 @@ let sequences = [
 ];
 
 // ========== AUTOMATION SYSTEM ==========
-// Daily limits
-const DAILY_LIMIT = 30; // Max emails per day
-let dailySentCount = 0;
-let dailySentDate = new Date().toDateString();
-
-// Campaign storage
-let campaigns = [];
-
-// Email queue for scheduled sending
-let emailQueue = [];
+const DAILY_LIMIT = 30;
 
 // Start automation scheduler (runs every minute)
 setInterval(async () => {
     await processEmailQueue();
-    // Only check for replies if there are active leads — avoids piling up IMAP connections
+    const leads = await db.getLeads();
     if (leads.some(l => l.status === 'contacted' || l.status === 'sequence-sent')) {
         await checkForReplies();
     }
     await processScheduledFollowups();
-}, 60000); // Check every minute
+}, 60000);
 
 // Process queued emails
 async function processEmailQueue() {
-    const today = new Date().toDateString();
-    if (dailySentDate !== today) {
-        dailySentCount = 0;
-        dailySentDate = today;
-    }
-    
-    if (emailQueue.length === 0 || dailySentCount >= DAILY_LIMIT) return;
-    
+    if (db.getDailySentCount() >= DAILY_LIMIT) return;
+    const queue = await db.getEmailQueue();
     const now = new Date();
-    const pendingEmails = emailQueue.filter(item => 
-        new Date(item.scheduledTime) <= now && !item.sent
-    );
-    
-    for (const emailJob of pendingEmails) {
-        if (dailySentCount >= DAILY_LIMIT) break;
-        
+    const pending = queue.filter(item => new Date(item.scheduledTime) <= now && !item.sent);
+    if (pending.length === 0) return;
+
+    for (const emailJob of pending) {
+        if (db.getDailySentCount() >= DAILY_LIMIT) break;
         try {
-            const lead = leads.find(l => l.id === emailJob.leadId);
+            const lead = await db.getLeadById(emailJob.leadId);
             if (!lead || lead.status === 'replied' || lead.status === 'converted') {
-                emailJob.sent = true;
+                await db.markQueueItemSent(emailJob.id);
                 continue;
             }
-            
             const template = emailTemplates[emailJob.template] || emailTemplates['cold-outreach'];
-            let subject = template.subject.replace(/{{name}}/g, lead.name || 'there')
-                .replace(/{{company}}/g, lead.company || 'your company');
-            let body = template.body.replace(/{{name}}/g, lead.name || 'there')
-                .replace(/{{company}}/g, lead.company || 'your company')
-                .replace(/{{value-proposition}}/g, 'getting more customers')
-                .replace(/{{goal}}/g, 'attract more customers');
-            
+            const subject = template.subject.replace(/{{name}}/g, lead.name || 'there').replace(/{{company}}/g, lead.company || 'your company');
+            const body = template.body.replace(/{{name}}/g, lead.name || 'there').replace(/{{company}}/g, lead.company || 'your company').replace(/{{value-proposition}}/g, 'getting more customers').replace(/{{goal}}/g, 'attract more customers');
             const transporter = getSmtpTransporter();
-            await transporter.sendMail({
-                from: AGENTMAIL.email,
-                to: lead.email,
-                subject: subject,
-                text: body
-            });
-            
-            dailySentCount++;
-            emailJob.sent = true;
-            campaignStats.sent++;
-            
-            // Update lead status
-            leads = leads.map(l => l.id === lead.id ? { 
-                ...l, 
-                status: 'contacted', 
-                lastContacted: new Date().toISOString(),
-                lastEmailType: emailJob.type
-            } : l);
-            
+            await transporter.sendMail({ from: AGENTMAIL.email, to: lead.email, subject, text: body });
+            db.incrementDailySent();
+            await db.markQueueItemSent(emailJob.id);
+            await db.incrementStat('sent');
+            await db.updateLead(lead.id, { status: 'contacted', last_contacted: new Date().toISOString() });
             console.log(`[AUTO] Sent ${emailJob.type} to ${lead.email}`);
         } catch (error) {
             console.error('[AUTO] Error sending email:', error.message);
@@ -1204,130 +934,83 @@ async function checkForReplies() {
     try {
         const imapConnection = await getImapConnection();
         await imapConnection.openBox('INBOX');
-        
         const searchCriteria = [['SINCE', new Date(Date.now() - 24 * 60 * 60 * 1000)]];
-        const fetchOptions = { bodies: ['HEADER', 'TEXT'], markSeen: false };
-        
-        const messages = await imapConnection.search(searchCriteria, fetchOptions);
-        
+        const messages = await imapConnection.search(searchCriteria, { bodies: ['HEADER'], markSeen: false });
+        const leads = await db.getLeads();
         for (const message of messages) {
             const fromHeader = message.parts.find(p => p.which === 'HEADER');
             const from = fromHeader?.body?.from?.[0] || '';
-            
-            // Check if it's a reply from our leads
             const lead = leads.find(l => from.includes(l.email));
             if (lead && lead.status !== 'replied') {
-                leads = leads.map(l => l.id === lead.id ? {
-                    ...l,
-                    status: 'replied',
-                    repliedAt: new Date().toISOString()
-                } : l);
-                
-                // Cancel pending follow-ups for this lead
-                emailQueue = emailQueue.filter(q => q.leadId !== lead.id);
-                
-                campaignStats.replies++;
+                await db.updateLead(lead.id, { status: 'replied', replied_at: new Date().toISOString() });
+                await db.removeLeadFromQueue(lead.id);
+                await db.incrementStat('replies');
                 console.log(`[AUTO] Reply detected from ${lead.email}`);
             }
         }
-        
         await imapConnection.end();
-    } catch (error) {
-        // IMAP check failed, ignore
-    }
+    } catch (error) { /* IMAP check failed, ignore */ }
 }
 
 // Process scheduled follow-ups
 async function processScheduledFollowups() {
     const now = new Date();
-    
+    const leads = await db.getLeads();
     for (const lead of leads) {
         if (lead.status === 'replied' || lead.status === 'converted') continue;
         if (!lead.lastContacted) continue;
-        
-        const lastContact = new Date(lead.lastContacted);
-        const daysSinceContact = Math.floor((now - lastContact) / (1000 * 60 * 60 * 24));
-        
-        // Check if we should send follow-up
+        const daysSinceContact = Math.floor((now - new Date(lead.lastContacted)) / (1000 * 60 * 60 * 24));
         if (daysSinceContact >= 3 && !lead.sentFollowup1) {
-            // Send follow-up 1
-            const existingJob = emailQueue.find(q => q.leadId === lead.id && q.type === 'followup-1' && !q.sent);
-            if (!existingJob) {
-                emailQueue.push({
-                    leadId: lead.id,
-                    template: 'follow-up',
-                    type: 'followup-1',
-                    scheduledTime: now,
-                    sent: false
-                });
-                leads = leads.map(l => l.id === lead.id ? { ...l, sentFollowup1: true } : l);
-            }
+            await db.addToQueue({ id: Date.now().toString(), leadId: lead.id, template: 'follow-up', type: 'followup-1', scheduledTime: now });
+            await db.updateLead(lead.id, { sent_followup1: true });
         }
-        
         if (daysSinceContact >= 7 && !lead.sentFollowup2) {
-            // Send follow-up 2
-            const existingJob = emailQueue.find(q => q.leadId === lead.id && q.type === 'followup-2' && !q.sent);
-if (!existingJob) {
-                emailQueue.push({
-                    leadId: lead.id,
-                    template: 'free-value',
-                    type: 'followup-2',
-                    scheduledTime: now,
-                    sent: false
-                });
-                leads = leads.map(l => l.id === lead.id ? { ...l, sentFollowup2: true } : l);
-            }
+            await db.addToQueue({ id: (Date.now()+1).toString(), leadId: lead.id, template: 'free-value', type: 'followup-2', scheduledTime: now });
+            await db.updateLead(lead.id, { sent_followup2: true });
         }
     }
 }
 
 // Campaign APIs
-app.post('/api/campaigns', (req, res) => {
-    const { name, template, leads: leadIds, schedule } = req.body;
-    
-    const campaign = {
-        id: Date.now().toString(),
-        name,
-        template: template || 'cold-outreach',
-        leads: leadIds || [],
-        schedule,
-        status: 'active',
-        createdAt: new Date().toISOString()
-    };
-    
-    campaigns.push(campaign);
-    
-    // Queue initial emails for all leads
+app.post('/api/campaigns', async (req, res) => {
+    const { name, template, leads: leadIds } = req.body;
+    const campaign = { id: Date.now().toString(), name, template: template || 'cold-outreach', leads: leadIds || [] };
+    await db.createCampaign(campaign);
     const now = new Date();
-    for (const leadId of leadIds) {
-        const lead = leads.find(l => l.id === leadId);
+    for (const leadId of (leadIds || [])) {
+        const lead = await db.getLeadById(leadId);
         if (lead && lead.status === 'new') {
-            emailQueue.push({
-                leadId,
-                template: campaign.template,
-                type: 'initial',
-                scheduledTime: now,
-                sent: false
-            });
+            await db.addToQueue({ leadId, template: campaign.template, type: 'initial', scheduledTime: now });
         }
     }
-    
     res.json({ success: true, campaign });
 });
 
-app.get('/api/campaigns', (req, res) => {
-    res.json({ 
-        campaigns, 
-        queueSize: emailQueue.filter(e => !e.sent).length,
-        dailySent: dailySentCount,
+app.get('/api/campaigns', async (req, res) => {
+    const campaigns = await db.getCampaigns();
+    const queue = await db.getEmailQueue();
+    res.json({
+        campaigns,
+        queueSize: queue.filter(e => !e.sent).length,
+        dailySent: db.getDailySentCount(),
         dailyLimit: DAILY_LIMIT
     });
 });
 
-app.get('/api/automation/status', (req, res) => {
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        timestamp: new Date().toISOString(),
+        agentMail: 'connected'
+    });
+});
+
+app.get('/api/automation/status', async (req, res) => {
+    const queue = await db.getEmailQueue();
+    const leads = await db.getLeads();
     res.json({
-        queueSize: emailQueue.filter(e => !e.sent).length,
-        dailySent: dailySentCount,
+        queueSize: queue.filter(e => !e.sent).length,
+        dailySent: db.getDailySentCount(),
         dailyLimit: DAILY_LIMIT,
         pendingFollowups: leads.filter(l => l.status === 'contacted' && !l.sentFollowup1).length,
         repliedLeads: leads.filter(l => l.status === 'replied').length
@@ -1341,28 +1024,21 @@ app.get('/api/services', (req, res) => {
 });
 
 // Get revenue stats
-app.get('/api/revenue', (req, res) => {
-    // Calculate revenue from converted clients
+app.get('/api/revenue', async (req, res) => {
+    const clients = await db.getClients();
+    const leads = await db.getLeads();
+    const stats = await db.getCampaignStats();
     const convertedClients = clients.filter(c => c.status === 'active');
     const totalRevenue = convertedClients.reduce((sum, c) => sum + (c.monthlyValue || 0), 0);
-    
-    // Calculate pipeline value
-    const pipelineValue = leads
-        .filter(l => l.status === 'opportunity')
-        .reduce((sum, l) => sum + (l.dealValue || 0), 0);
-    
+    const pipelineValue = leads.filter(l => l.status === 'opportunity').reduce((sum, l) => sum + (l.dealValue || 0), 0);
     res.json({
         success: true,
         stats: {
-            totalRevenue,
-            monthlyRecurringRevenue: totalRevenue,
-            pipelineValue,
-            totalClients: convertedClients.length,
-            totalLeads: leads.length,
-            totalSent: campaignStats.sent,
-            totalReplies: campaignStats.replies,
-            conversionRate: campaignStats.replies > 0 
-                ? Math.round((leads.filter(l => l.status === 'opportunity' || l.status === 'converted').length / campaignStats.replies) * 100) 
+            totalRevenue, monthlyRecurringRevenue: totalRevenue, pipelineValue,
+            totalClients: convertedClients.length, totalLeads: leads.length,
+            totalSent: stats.sent, totalReplies: stats.replies,
+            conversionRate: stats.replies > 0
+                ? Math.round((leads.filter(l => l.status === 'opportunity' || l.status === 'converted').length / stats.replies) * 100)
                 : 0
         },
         clients: convertedClients,
@@ -1371,144 +1047,96 @@ app.get('/api/revenue', (req, res) => {
 });
 
 // Convert a lead to client
-app.post('/api/leads/:id/convert', (req, res) => {
+app.post('/api/leads/:id/convert', async (req, res) => {
     const { id } = req.params;
     const { serviceTier, dealValue } = req.body;
-    
-    const lead = leads.find(l => l.id === id);
-    if (!lead) {
-        return res.json({ success: false, error: 'Lead not found' });
-    }
-    
+    const lead = await db.getLeadById(id);
+    if (!lead) return res.json({ success: false, error: 'Lead not found' });
     const service = services[serviceTier] || services['starter'];
     const value = dealValue || service.price;
-    
-    // Add to clients
-    clients.push({
-        id: lead.id,
-        name: lead.name,
-        email: lead.email,
-        company: lead.company,
-        serviceTier: serviceTier,
-        monthlyValue: value,
-        convertedAt: new Date().toISOString(),
-        status: 'active'
+    const client = await db.createClient({
+        id: lead.id, leadId: lead.id, name: lead.name, email: lead.email,
+        company: lead.company, package: serviceTier || 'starter',
+        status: 'active', leadsPromised: service.leadsPerMonth,
+        leadsDelivered: 0, sampleDelivered: false,
+        monthly_value: value, service_tier: serviceTier,
+        converted_at: new Date().toISOString()
     });
-    
-    // Update lead status
-    leads = leads.map(l => l.id === id ? {
-        ...l,
-        status: 'converted',
-        convertedAt: new Date().toISOString(),
-        dealValue: value
-    } : l);
-    
-    // Update stats
-    campaignStats.revenue += value;
-    
-    res.json({ success: true, client: clients[clients.length - 1] });
+    await db.updateLead(id, { status: 'converted', deal_value: value });
+    await db.incrementStat('revenue', value);
+    res.json({ success: true, client });
 });
 
 // Set lead as opportunity
-app.post('/api/leads/:id/opportunity', (req, res) => {
+app.post('/api/leads/:id/opportunity', async (req, res) => {
     const { id } = req.params;
     const { interestedTier, notes } = req.body;
-    
     const service = services[interestedTier] || services['starter'];
-    
-    leads = leads.map(l => l.id === id ? {
-        ...l,
-        status: 'opportunity',
-        interestedTier: interestedTier,
-        dealValue: service.price,
-        opportunityNotes: notes,
-        markedAt: new Date().toISOString()
-    } : l);
-    
-    campaignStats.opportunities++;
-    
+    await db.updateLead(id, {
+        status: 'opportunity', interested_tier: interestedTier,
+        deal_value: service.price, opportunity_notes: notes
+    });
+    await db.incrementStat('opportunities');
     res.json({ success: true });
 });
 
 // Add lead
-app.post('/api/leads', (req, res) => {
+app.post('/api/leads', async (req, res) => {
     const { name, email, company, industry, phone, notes } = req.body;
-    if (!email) {
-        return res.json({ success: false, error: 'Email is required' });
-    }
-    const newLead = {
+    if (!email) return res.json({ success: false, error: 'Email is required' });
+    const newLead = await db.createLead({
         id: Date.now().toString(),
-        name: name || '',
-        email,
-        company: company || '',
-        industry: industry || '',
-        phone: phone || '',
-        notes: notes || '',
-        status: 'new', // new, contacted, replied, converted, failed
-        source: 'manual',
-        createdAt: new Date().toISOString()
-    };
-    leads.push(newLead);
-    campaignStats.leadsAdded++;
+        name: name || '', email, company: company || '',
+        industry: industry || '', phone: phone || '', notes: notes || '',
+        status: 'new', source: 'manual'
+    });
+    await db.incrementStat('leadsAdded');
     res.json({ success: true, lead: newLead });
 });
 
 // Get all leads
-app.get('/api/leads', (req, res) => {
-    res.json({ leads, stats: campaignStats });
+app.get('/api/leads', async (req, res) => {
+    const leads = await db.getLeads();
+    const stats = await db.getCampaignStats();
+    res.json({ leads, stats });
 });
 
 // Get replied leads (for notifications)
-app.get('/api/leads/replied', (req, res) => {
+app.get('/api/leads/replied', async (req, res) => {
+    const leads = await db.getLeads();
     const repliedLeads = leads.filter(l => l.status === 'replied');
-    res.json({ 
-        success: true, 
-        replies: repliedLeads,
-        count: repliedLeads.length 
-    });
+    res.json({ success: true, replies: repliedLeads, count: repliedLeads.length });
 });
 
 // Get recent activity (for notifications)
-app.get('/api/notifications', (req, res) => {
-    const notifications = [];
-    
-    // Add replied leads as notifications
-    const repliedLeads = leads.filter(l => l.status === 'replied' && l.repliedAt);
-    repliedLeads.forEach(lead => {
-        notifications.push({
+app.get('/api/notifications', async (req, res) => {
+    const leads = await db.getLeads();
+    const notifications = leads
+        .filter(l => l.status === 'replied' && l.repliedAt)
+        .map(lead => ({
             id: 'reply-' + lead.id,
             type: 'reply',
             leadId: lead.id,
             leadName: lead.name || lead.email,
             company: lead.company,
-            message: `replied to your email`,
+            message: 'replied to your email',
             timestamp: lead.repliedAt,
             read: false
-        });
-    });
-    
-    // Sort by timestamp descending
-    notifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
-    res.json({ 
-        success: true, 
-        notifications: notifications.slice(0, 20),
-        unreadCount: notifications.filter(n => !n.read).length
-    });
+        }))
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    res.json({ success: true, notifications: notifications.slice(0, 20), unreadCount: notifications.length });
 });
 
 // Update lead status
-app.put('/api/leads/:id', (req, res) => {
-    const { id } = req.params;
+app.put('/api/leads/:id', async (req, res) => {
     const { status } = req.body;
-    leads = leads.map(l => l.id === id ? { ...l, status } : l);
+    await db.updateLead(req.params.id, { status });
     res.json({ success: true });
 });
 
 // Delete lead
-app.delete('/api/leads/:id', (req, res) => {
-    const { id } = req.params;
-    leads = leads.filter(l => l.id !== id);
+app.delete('/api/leads/:id', async (req, res) => {
+    await db.deleteLead(req.params.id);
     res.json({ success: true });
 });
 
@@ -1523,37 +1151,23 @@ app.get('/api/sequences', (req, res) => {
 });
 
 // CSV Import - Bulk add leads
-app.post('/api/leads/import', (req, res) => {
+app.post('/api/leads/import', async (req, res) => {
     const { leads: newLeads } = req.body;
-    
-    if (!Array.isArray(newLeads) || newLeads.length === 0) {
+    if (!Array.isArray(newLeads) || newLeads.length === 0)
         return res.json({ success: false, error: 'No leads provided' });
-    }
-    
-    let added = 0;
-    newLeads.forEach(lead => {
-        if (lead.email) {
-            const exists = leads.find(l => l.email.toLowerCase() === lead.email.toLowerCase());
-            if (!exists) {
-                leads.push({
-                    id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-                    name: lead.name || lead.Name || '',
-                    email: lead.email || lead.Email || '',
-                    company: lead.company || lead.Company || '',
-                    industry: lead.industry || lead.Industry || '',
-                    phone: lead.phone || lead.Phone || '',
-                    notes: lead.notes || lead.Notes || '',
-                    status: 'new',
-                    source: 'csv-import',
-                    createdAt: new Date().toISOString()
-                });
-                added++;
-            }
-        }
-    });
-    
-    campaignStats.leadsAdded += added;
-    res.json({ success: true, added, total: leads.length });
+    const normalized = newLeads.map(l => ({
+        name: l.name || l.Name || '',
+        email: l.email || l.Email || '',
+        company: l.company || l.Company || '',
+        industry: l.industry || l.Industry || '',
+        phone: l.phone || l.Phone || '',
+        notes: l.notes || l.Notes || '',
+        source: 'csv-import'
+    }));
+    const { added, skipped } = await db.importLeads(normalized);
+    await db.incrementStat('leadsAdded', added);
+    const leads = await db.getLeads();
+    res.json({ success: true, added, skipped, total: leads.length });
 });
 
 // ========== APOLLO.IO LEAD SOURCING ==========
@@ -1653,53 +1267,26 @@ app.post('/api/apollo/search', async (req, res) => {
 });
 
 // Import leads from Apollo to local database
-app.post('/api/apollo/import', (req, res) => {
+app.post('/api/apollo/import', async (req, res) => {
     const { leads: apolloLeads } = req.body;
-    
-    if (!Array.isArray(apolloLeads) || apolloLeads.length === 0) {
+    if (!Array.isArray(apolloLeads) || apolloLeads.length === 0)
         return res.json({ success: false, error: 'No leads to import' });
-    }
-    
-    let added = 0;
-    let skipped = 0;
-    
-    apolloLeads.forEach(lead => {
-        if (!lead.email) {
-            skipped++;
-            return;
-        }
-        
-        const exists = leads.find(l => l.email.toLowerCase() === lead.email.toLowerCase());
-        if (exists) {
-            skipped++;
-            return;
-        }
-        
-        leads.push({
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            name: lead.name || '',
-            email: lead.email,
-            company: lead.company || '',
-            industry: lead.industry || '',
-            title: lead.title || '',
-            phone: lead.phone || '',
-            linkedin: lead.linkedin || '',
-            status: 'new',
-            source: 'apollo-import',
-            createdAt: new Date().toISOString()
-        });
-        added++;
-    });
-    
-    campaignStats.leadsAdded += added;
-    res.json({ success: true, added, skipped, total: leads.length });
+    const normalized = apolloLeads.filter(l => l.email).map(l => ({
+        name: l.name || '', email: l.email, company: l.company || '',
+        industry: l.industry || '', title: l.title || '',
+        phone: l.phone || '', linkedin: l.linkedin || '', source: 'apollo-import'
+    }));
+    const { added, skipped } = await db.importLeads(normalized);
+    await db.incrementStat('leadsAdded', added);
+    const allLeads = await db.getLeads();
+    res.json({ success: true, added, skipped, total: allLeads.length });
 });
 
 // Send sequence to lead
 app.post('/api/sequence/send', async (req, res) => {
     const { leadId, sequenceId } = req.body;
     
-    const lead = leads.find(l => l.id === leadId);
+    const lead = await db.getLeadById(leadId);
     const sequence = sequences.find(s => s.id === sequenceId);
     
     if (!lead) return res.json({ success: false, error: 'Lead not found' });
@@ -1726,7 +1313,7 @@ app.post('/api/sequence/send', async (req, res) => {
                 subject: subject,
                 text: body
             });
-            campaignStats.sent++;
+            await db.incrementStat('sent');
             results.push({ step: step.name, success: true });
         } catch (error) {
             results.push({ step: step.name, success: false, error: error.message });
@@ -1735,7 +1322,7 @@ app.post('/api/sequence/send', async (req, res) => {
         if (step.day > 0) await new Promise(r => setTimeout(r, 1000));
     }
     
-    leads = leads.map(l => l.id === leadId ? { ...l, status: 'sequence-sent', sequenceId } : l);
+    await db.updateLead(leadId, { status: 'sequence-sent', sequence_id: sequenceId });
     
     res.json({ success: true, results, stats: campaignStats });
 });
@@ -1743,11 +1330,8 @@ app.post('/api/sequence/send', async (req, res) => {
 // Send outreach email to a lead
 app.post('/api/outreach/send', async (req, res) => {
     const { leadId, templateKey } = req.body;
-    
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead) {
-        return res.json({ success: false, error: 'Lead not found' });
-    }
+    const lead = await db.getLeadById(leadId);
+    if (!lead) return res.json({ success: false, error: 'Lead not found' });
     
     const template = emailTemplates[templateKey] || emailTemplates['cold-outreach'];
     
@@ -1772,9 +1356,8 @@ app.post('/api/outreach/send', async (req, res) => {
         });
         
         // Update lead status
-        leads = leads.map(l => l.id === leadId ? { ...l, status: 'contacted', lastContacted: new Date().toISOString() } : l);
-        campaignStats.sent++;
-        
+        await db.updateLead(leadId, { status: 'contacted', last_contacted: new Date().toISOString() });
+        await db.incrementStat('sent');
         res.json({ success: true, messageId: info.messageId });
     } catch (error) {
         console.error('Outreach email error:', error);
@@ -1785,8 +1368,8 @@ app.post('/api/outreach/send', async (req, res) => {
 // Send bulk outreach (with delay to avoid spam)
 app.post('/api/outreach/bulk', async (req, res) => {
     const { templateKey, delayMinutes = 5 } = req.body;
-    
-    const newLeads = leads.filter(l => l.status === 'new');
+    const allLeads = await db.getLeads();
+    const newLeads = allLeads.filter(l => l.status === 'new');
     
     if (newLeads.length === 0) {
         return res.json({ success: false, error: 'No new leads to contact' });
@@ -1818,8 +1401,8 @@ app.post('/api/outreach/bulk', async (req, res) => {
                 text: body
             });
             
-            leads = leads.map(l => l.id === lead.id ? { ...l, status: 'contacted', lastContacted: new Date().toISOString() } : l);
-            campaignStats.sent++;
+            await db.updateLead(lead.id, { status: 'contacted', last_contacted: new Date().toISOString() });
+            await db.incrementStat('sent');
             results.push({ leadId: lead.id, success: true });
         } catch (error) {
             results.push({ leadId: lead.id, success: false, error: error.message });
@@ -1835,8 +1418,10 @@ app.post('/api/outreach/bulk', async (req, res) => {
 });
 
 // Get campaign stats
-app.get('/api/campaign/stats', (req, res) => {
-    res.json({ stats: campaignStats, leads: leads });
+app.get('/api/campaign/stats', async (req, res) => {
+    const stats = await db.getCampaignStats();
+    const leads = await db.getLeads();
+    res.json({ stats, leads });
 });
 
 // ========== AI PERSONALIZATION ==========
@@ -2121,54 +1706,44 @@ function parseAIResponse(response) {
     };
 }
 
-// Health check (public — frontend needs this to check connection)
+// API Routes
+
+// Health check
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'ok', 
-        timestamp: new Date().toISOString(),
-        agentMail: 'connected'
-    });
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Serve frontend (public)
+// Serve frontend
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Protect all /api/* routes except /api/health
-app.use('/api', requireAuth);
-
 // Get tasks
-app.get('/api/tasks', (req, res) => {
+app.get('/api/tasks', async (req, res) => {
+    const tasks = await db.getTasks();
     res.json({ tasks });
 });
 
 // Create task
-app.post('/api/tasks', (req, res) => {
+app.post('/api/tasks', async (req, res) => {
     const { content, priority = 'medium' } = req.body;
-    const newTask = {
+    const newTask = await db.createTask({
         id: Date.now().toString(),
-        content,
-        status: 'pending',
-        priority,
-        createdAt: new Date().toISOString()
-    };
-    tasks.unshift(newTask);
+        content, status: 'pending', priority
+    });
     res.json({ success: true, task: newTask });
 });
 
 // Update task
-app.put('/api/tasks/:id', (req, res) => {
-    const { id } = req.params;
+app.put('/api/tasks/:id', async (req, res) => {
     const { status } = req.body;
-    tasks = tasks.map(t => t.id === id ? { ...t, status } : t);
+    await db.updateTask(req.params.id, status);
     res.json({ success: true });
 });
 
 // Delete task
-app.delete('/api/tasks/:id', (req, res) => {
-    const { id } = req.params;
-    tasks = tasks.filter(t => t.id !== id);
+app.delete('/api/tasks/:id', async (req, res) => {
+    await db.deleteTask(req.params.id);
     res.json({ success: true });
 });
 
@@ -2305,24 +1880,23 @@ app.post('/api/config/gemini', (req, res) => {
     res.json({ success: true });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log('');
-    console.log('========================================');
-    console.log('   Nexus AI Backend Server');
-    console.log('   Connected to AgentMail');
-    console.log('');
-    console.log('   Server running on: http://localhost:' + PORT);
-    console.log('');
-    console.log('   Endpoints:');
-    console.log('   - GET  /api/health     Health check');
-    console.log('   - GET  /api/tasks      Get all tasks');
-    console.log('   - POST /api/tasks      Create task');
-    console.log('   - GET  /api/emails     Fetch emails');
-    console.log('   - POST /api/send-email Send email');
-    console.log('   - POST /api/command    Process AI command');
-    console.log('========================================');
-    console.log('');
+// Root route - serves the frontend
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Start server — init DB first
+db.initDB().then(() => {
+    app.listen(PORT, () => {
+        console.log('========================================');
+        console.log('   Nexus AI Backend Server');
+        console.log('   Server running on port ' + PORT);
+        console.log('   Database: connected');
+        console.log('========================================');
+    });
+}).catch(err => {
+    console.error('[FATAL] DB init failed:', err.message);
+    process.exit(1);
 });
 
 module.exports = app;
